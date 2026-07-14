@@ -1,0 +1,333 @@
+/* ============================================================
+   とどうふけんドリル スタイル（子ども向け・iPad最適化）
+   kanji_drill/style.css をベースに地図関連クラスを追加
+   ============================================================ */
+:root {
+  --main: #1a4d80;        /* メインの青 */
+  --main-light: #e8eef6;  /* うすい青 */
+  --accent: #e8eaf6;
+  --ok: #2e8b57;          /* できた（緑） */
+  --ng: #c0392b;          /* まちがえた（赤） */
+  --bg: #f4f7fb;
+  --card: #ffffff;
+  --text: #213040;
+  --muted: #7a8694;
+  --radius: 18px;
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Hiragino Maru Gothic ProN", "ヒラギノ丸ゴ ProN", "Hiragino Kaku Gothic ProN", sans-serif;
+  -webkit-text-size-adjust: 100%;
+}
+
+#app {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: env(safe-area-inset-top) 18px calc(env(safe-area-inset-bottom) + 24px);
+  min-height: 100vh;
+}
+
+.hidden { display: none !important; }
+
+/* --- ヘッダー --- */
+.app-header { text-align: center; padding: 18px 0 6px; }
+.app-header h1 {
+  font-size: 28px;
+  color: var(--main);
+  margin: 0;
+  letter-spacing: 0.04em;
+}
+
+/* --- 統計カード --- */
+.stat-row {
+  display: flex;
+  gap: 10px;
+  margin: 16px 0;
+}
+.stat-card {
+  flex: 1;
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 14px 6px;
+  text-align: center;
+  box-shadow: 0 2px 8px rgba(26, 77, 128, 0.08);
+}
+.stat-num { font-size: 30px; font-weight: 800; color: var(--main); line-height: 1.1; }
+.stat-num .unit { font-size: 15px; font-weight: 600; margin-left: 2px; }
+.stat-label { font-size: 13px; color: var(--muted); margin-top: 4px; }
+
+.done-note {
+  background: #fff7e0;
+  border: 2px solid #ffd966;
+  border-radius: var(--radius);
+  padding: 12px;
+  text-align: center;
+  font-weight: 700;
+  color: #8a6d00;
+  margin: 8px 0;
+}
+
+/* --- パネル --- */
+.panel {
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin: 16px 0;
+  box-shadow: 0 2px 8px rgba(26, 77, 128, 0.06);
+}
+.panel h2 {
+  font-size: 18px;
+  color: var(--main);
+  margin: 0 0 10px;
+  border-bottom: 3px solid var(--main-light);
+  padding-bottom: 6px;
+}
+
+/* --- ボタン --- */
+.big-btn {
+  display: block;
+  width: 100%;
+  padding: 18px;
+  font-size: 22px;
+  font-weight: 800;
+  border: none;
+  border-radius: var(--radius);
+  background: var(--main-light);
+  color: var(--main);
+  cursor: pointer;
+  margin: 14px 0;
+  transition: transform 0.05s ease, filter 0.1s ease;
+}
+.big-btn.primary { background: var(--main); color: #fff; box-shadow: 0 4px 0 #123a61; }
+.big-btn:active { transform: translateY(2px); }
+.big-btn:disabled { opacity: 0.5; box-shadow: none; cursor: default; }
+
+/* --- ステップ選択ボタン（ホーム） --- */
+.step-list { display: flex; flex-direction: column; }
+.step-btn {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  text-align: left;
+}
+.step-progress { font-size: 14px; font-weight: 600; opacity: 0.85; }
+.step-btn.locked { background: #e3e8ef; color: var(--muted); }
+
+.mid-btn {
+  padding: 12px 18px;
+  font-size: 16px;
+  font-weight: 700;
+  border: 2px solid var(--main);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--main);
+  cursor: pointer;
+  margin-top: 8px;
+}
+.mid-btn.primary { background: var(--main); color: #fff; }
+
+.text-btn {
+  display: block;
+  width: 100%;
+  background: none;
+  border: none;
+  color: var(--main);
+  font-size: 16px;
+  padding: 12px;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.text-btn.small { width: auto; font-size: 14px; padding: 6px; text-decoration: none; color: var(--muted); }
+/* バックアップ促し（保護者向け・控えめな注意表示） */
+.backup-reminder {
+  text-decoration: none;
+  font-size: 14px;
+  color: var(--main);
+  background: var(--main-light);
+  border-radius: var(--radius);
+  margin-bottom: 8px;
+}
+
+/* --- 苦手リスト --- */
+#home-weak ul { list-style: none; margin: 0; padding: 0; }
+#home-weak li { padding: 8px 4px; border-bottom: 1px dashed #e3e8ef; display: flex; align-items: center; gap: 8px; }
+#home-weak li:last-child { border-bottom: none; }
+.weak-kanji {
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--main);
+}
+.kanji-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
+.kanji-row .weak-kanji {
+  background: var(--main-light);
+  border-radius: 12px;
+  padding: 6px 12px;
+}
+
+.muted { color: var(--muted); }
+.small { font-size: 13px; }
+
+/* ============ クイズ画面 ============ */
+.quiz-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+}
+.progress-badge {
+  background: var(--main);
+  color: #fff;
+  border-radius: 999px;
+  padding: 6px 16px;
+  font-weight: 700;
+  font-size: 16px;
+}
+
+.question-area {
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 22px 18px;
+  text-align: center;
+  margin: 10px 0;
+  box-shadow: 0 2px 8px rgba(26, 77, 128, 0.06);
+}
+.instruction { color: var(--muted); font-size: 15px; margin: 0 0 12px; }
+/* 読み（よみ）= 答えるための必須の手がかり。問題文の上に大きく表示 */
+.reading-cue {
+  font-size: 34px;
+  font-weight: 800;
+  color: var(--main);
+  letter-spacing: 0.08em;
+  margin: 6px 0 14px;
+}
+.prompt {
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1.9;
+  margin: 6px 0;
+}
+
+/* 解答 */
+.reveal { margin-top: 10px; }
+.answer-box {
+  background: var(--main-light);
+  border-radius: var(--radius);
+  padding: 18px;
+  text-align: center;
+}
+.answer-kanji {
+  font-size: 60px;
+  font-weight: 800;
+  color: var(--main);
+  line-height: 1.1;
+}
+.self-check-label { text-align: center; color: var(--muted); margin: 12px 0 8px; }
+
+.grade-row { display: flex; gap: 12px; }
+.grade-btn {
+  flex: 1;
+  padding: 20px 0;
+  font-size: 22px;
+  font-weight: 800;
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  color: #fff;
+}
+.grade-btn.ok { background: var(--ok); box-shadow: 0 4px 0 #1f6b40; }
+.grade-btn.ng { background: var(--ng); box-shadow: 0 4px 0 #91291c; }
+.grade-btn:active { transform: translateY(2px); }
+
+/* ============ 3択選択肢（ちほう・よみ・地図の県名当て 共通） ============ */
+.vocab-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 14px 0;
+}
+.choice-btn {
+  padding: 18px 14px;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.5;
+  border: 2px solid var(--main-light);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+  box-shadow: 0 2px 8px rgba(26, 77, 128, 0.06);
+}
+.choice-btn:active { transform: translateY(2px); }
+.choice-btn.ok { background: var(--ok); border-color: var(--ok); color: #fff; }
+.choice-btn.ng { background: var(--ng); border-color: var(--ng); color: #fff; }
+.choice-btn:disabled { cursor: default; }
+.choice-btn:disabled:not(.ok):not(.ng) { opacity: 0.5; }
+
+@media (max-width: 380px) {
+  .stat-row { flex-wrap: wrap; }
+  .stat-row .stat-card { flex-basis: 47%; }
+}
+
+/* ============ 結果画面 ============ */
+.result-score-box { text-align: center; margin: 20px 0; }
+.result-score { font-size: 56px; font-weight: 800; color: var(--main); }
+.result-msg { font-size: 20px; font-weight: 700; margin: 8px 0; }
+.result-streak { font-size: 18px; color: var(--muted); }
+
+/* ============ バックアップ画面 ============ */
+input[type="text"] {
+  width: 100%;
+  padding: 12px;
+  font-size: 16px;
+  border: 2px solid #d6deea;
+  border-radius: 12px;
+  font-family: inherit;
+  background: #fff;
+}
+.panel label {
+  display: block;
+  font-size: 14px;
+  color: var(--muted);
+  margin: 10px 0 0;
+}
+.panel label input { margin-top: 4px; }
+.form-msg { min-height: 20px; font-size: 14px; font-weight: 700; margin: 8px 0 0; }
+.form-msg.ok { color: var(--ok); }
+.form-msg.ng { color: var(--ng); }
+.restore-label { display: block; margin-top: 10px; }
+
+/* ============ 日本地図（Step2=ばしょ／Step4=かく のヒント表示） ============ */
+.jp-map, .map-hint {
+  margin: 10px 0;
+}
+.map-hint {
+  max-width: 260px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.jp-map svg, .map-hint svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+/* 県の既定色。fill は SVG のプレゼンテーション属性より優先される */
+.jp-map [data-code], .map-hint [data-code] {
+  fill: #dfe7f0;
+  stroke: #ffffff;
+  stroke-width: 1;
+}
+.jp-map [data-code] { cursor: pointer; }
+.jp-map [data-code]:hover { fill: #c3d3e6; }
+/* 都道府県境界の白線は装飾のみ。クリック判定に影響させない */
+.jp-map .boundary-line, .map-hint .boundary-line { pointer-events: none; }
+
+.pref-target { fill: var(--main) !important; }
+.pref-correct { fill: var(--ok) !important; }
+.pref-wrong { fill: var(--ng) !important; }

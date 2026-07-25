@@ -20,6 +20,7 @@ const READING_STEP = 1; // よみ（読み方3択）ステップの番号
 const MAP_STEP = 2; // ばしょ（地図）ステップの番号
 const REGION_STEP = 3; // ちほう（地方3択）ステップの番号
 const WRITE_STEP = 4; // かく（書く・自己採点）ステップの番号
+const MAX_SNAP_UNITS = 60; // 地図タップの吸着上限（viewBoxユニット）。これより陸から遠いタップは無反応にする
 
 // --- 日付ユーティリティ --------------------------------------
 /** 今日の日付を YYYY-MM-DD（ローカル時刻）で返す */
@@ -358,6 +359,124 @@ function zoomToRegion(svg, regionName) {
   svg.setAttribute("viewBox", `${minX - padX} ${minY - padY} ${w + padX * 2} ${h + padY * 2}`);
 }
 
+/**
+ * 各県の「本体形状」の外接矩形を viewBox ユーザー座標で求める。
+ * 東京のように本土と離島が1つの <path> にまとまっている県は、要素全体の bbox を取ると
+ * 本土〜小笠原間の海上まで含んだ縦長の箱になり、代表点が陸から外れてしまう。
+ * そのためサブパス単位で測り、面積が最大のもの（＝本土）だけを代表として採用する。
+ * getBBox()/getCTM() はレンダリング状態が前提なので、svg を表示中のコンテナへ appendChild し、
+ * 画面を表示状態にしてから呼ぶこと（.hidden が display:none のため非表示だと 0/null になる）。
+ * @returns {{code:number,minX:number,minY:number,maxX:number,maxY:number}[]}
+ */
+function measurePrefShapes(svg) {
+  const SVG_NS = "http://www.w3.org/2000/svg";
+  const pt = svg.createSVGPoint();
+  const shapes = [];
+
+  svg.querySelectorAll("g.prefecture[data-code]").forEach((g) => {
+    const code = parseInt(g.getAttribute("data-code"), 10);
+
+    // 測る対象を集める。複数サブパスを持つ path は分割して一時要素で測る
+    const parts = []; // { el } = 既存要素 / { d } = 一時生成するパス
+    g.querySelectorAll("path, polygon").forEach((el) => {
+      if (el.tagName.toLowerCase() === "polygon") {
+        parts.push({ el });
+        return;
+      }
+      const subs = (el.getAttribute("d") || "").match(/M[^M]+/g) || [];
+      if (subs.length <= 1) parts.push({ el });
+      else subs.forEach((d) => parts.push({ d }));
+    });
+
+    let bestBox = null;
+    let bestCtm = null;
+    let bestArea = -1;
+    parts.forEach((part) => {
+      let el = part.el;
+      let temp = null;
+      if (!el) {
+        // 一時パスを同じ親に置いて測る。同期処理内で必ず除去するので描画はされない
+        temp = document.createElementNS(SVG_NS, "path");
+        temp.setAttribute("d", part.d);
+        g.appendChild(temp);
+        el = temp;
+      }
+      let box = null;
+      let ctm = null;
+      try {
+        box = el.getBBox();
+        ctm = el.getCTM(); // 要素のローカル座標 → SVGルートのユーザー座標
+      } catch (err) {
+        box = null;
+      }
+      if (temp) temp.remove();
+      if (!box || !ctm) return;
+      const area = box.width * box.height;
+      if (area <= bestArea) return;
+      bestArea = area;
+      bestBox = box;
+      bestCtm = ctm;
+    });
+    if (!bestBox) return;
+
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    [
+      [bestBox.x, bestBox.y],
+      [bestBox.x + bestBox.width, bestBox.y],
+      [bestBox.x, bestBox.y + bestBox.height],
+      [bestBox.x + bestBox.width, bestBox.y + bestBox.height],
+    ].forEach(([x, y]) => {
+      pt.x = x;
+      pt.y = y;
+      const q = pt.matrixTransform(bestCtm);
+      minX = Math.min(minX, q.x);
+      minY = Math.min(minY, q.y);
+      maxX = Math.max(maxX, q.x);
+      maxY = Math.max(maxY, q.y);
+    });
+    shapes.push({ code, minX, minY, maxX, maxY });
+  });
+  return shapes;
+}
+
+/**
+ * タップ位置から回答対象の県コードを決める。
+ * 県の形状を直接タップした場合はそれを最優先し（ブラウザの厳密な当たり判定をそのまま使う）、
+ * 外した場合のみ「本体形状の矩形までの距離が最短の県」へ吸着させる。
+ * 東京のように実寸10px程度の県でも狙って選べるようにするための処理。
+ * 各点が必ず1県だけに帰属するので、隣接県の判定領域が重なることはない。
+ * @returns {number|null} 県コード。陸から遠すぎる場合は null
+ */
+function resolveTappedPref(e, svg, shapes) {
+  const hit = e.target.closest("g.prefecture[data-code]");
+  if (hit) return parseInt(hit.getAttribute("data-code"), 10);
+
+  // スクリーン座標 → viewBox ユーザー座標（zoomToRegion と同じ手法）
+  const ctm = svg.getScreenCTM();
+  if (!ctm) return null;
+  const pt = svg.createSVGPoint();
+  pt.x = e.clientX;
+  pt.y = e.clientY;
+  const q = pt.matrixTransform(ctm.inverse());
+
+  let best = null;
+  let bestD = Infinity;
+  shapes.forEach((s) => {
+    // 点と矩形の距離（矩形の内側なら 0）
+    const dx = Math.max(s.minX - q.x, 0, q.x - s.maxX);
+    const dy = Math.max(s.minY - q.y, 0, q.y - s.maxY);
+    const d = Math.hypot(dx, dy);
+    if (d < bestD) {
+      bestD = d;
+      best = s.code;
+    }
+  });
+  return bestD <= MAX_SNAP_UNITS ? best : null;
+}
+
 /** 指定コンテナに、対象の県をハイライトし地方全体が見える範囲にズームした地図を描画する（よみ・ちほう・かく の3ステップで共通利用） */
 function renderMapHint(containerId, p) {
   const hint = document.getElementById(containerId);
@@ -507,7 +626,8 @@ function finishSession() {
 // ============================================================
 // 地図画面（Step2=ばしょ。偶数問=タップで位置当て／奇数問=ハイライト→3択）
 // ============================================================
-let mapState = null; // { ids, index, results }
+// picked/shapes/svg/pref は問題ごとの一時情報（localStorage には ids/index/results だけ保存する）
+let mapState = null; // { ids, index, results, picked, shapes, svg, pref }
 let mapTapHandler = null; // 現在アタッチ中のタップリスナー（1回のみ有効にするため保持）
 
 function startMapStep() {
@@ -534,11 +654,17 @@ function showMapQuestion() {
   document.getElementById("map-progress").textContent =
     `${mapState.index + 1} / ${mapState.ids.length}`;
   document.getElementById("map-feedback").classList.add("hidden");
+  document.getElementById("map-confirm").classList.add("hidden");
+  mapState.picked = null;
 
   const container = document.getElementById("map-container");
   container.innerHTML = "";
   const svg = cloneMapSvg();
   container.appendChild(svg);
+
+  // 形状の計測(getBBox/getCTM)は表示状態でないと機能しないため、
+  // 中身を組み立てる前に画面を表示状態にしておく
+  showScreen("map");
 
   const choiceArea = document.getElementById("map-choice-area");
   const isLocate = mapState.index % 2 === 0; // 偶数=タップで位置当て／奇数=ハイライト→3択
@@ -548,7 +674,10 @@ function showMapQuestion() {
     document.getElementById("map-prompt").textContent = p.name;
     choiceArea.classList.add("hidden");
     choiceArea.innerHTML = "";
-    mapTapHandler = (e) => onMapTap(e, svg, p);
+    mapState.shapes = measurePrefShapes(svg);
+    mapState.svg = svg;
+    mapState.pref = p;
+    mapTapHandler = (e) => onMapTap(e, svg);
     svg.addEventListener("click", mapTapHandler);
   } else {
     document.getElementById("map-instruction").textContent = "地図で 光っている 県は どこ？";
@@ -557,17 +686,34 @@ function showMapQuestion() {
     choiceArea.classList.remove("hidden");
     renderMapChoices(p);
   }
-  showScreen("map");
 }
 
-/** 地図タップ判定（イベント委譲。1回のみ有効） */
-function onMapTap(e, svg, p) {
-  const target = e.target.closest("[data-code]");
-  if (!target) return;
+/** 地図タップ＝「選択」。この時点では採点せず、確認ボタンで確定させる（選び直し可能） */
+function onMapTap(e, svg) {
+  const code = resolveTappedPref(e, svg, mapState.shapes);
+  if (code === null) return; // 陸から遠いタップは無視し、そのまま選び直させる
+  svg.querySelectorAll(".pref-picked").forEach((el) => el.classList.remove("pref-picked"));
+  const g = svg.querySelector(`g.prefecture[data-code="${code}"]`);
+  if (g) g.classList.add("pref-picked");
+  mapState.picked = code;
+  // 県名は出さない（答えが漏れるため）。色だけで「いまここを選んでいる」と示す
+  document.getElementById("map-confirm").classList.remove("hidden");
+}
+
+/** 「ここで いい？」で選択を確定して採点する */
+function confirmMapAnswer() {
+  if (!mapState || mapState.picked === null) return;
+  const svg = mapState.svg;
+  const p = mapState.pref;
   svg.removeEventListener("click", mapTapHandler);
-  const tappedCode = parseInt(target.getAttribute("data-code"), 10);
-  const ok = tappedCode === parseInt(p.id, 10);
-  target.classList.add(ok ? "pref-correct" : "pref-wrong");
+  document.getElementById("map-confirm").classList.add("hidden");
+  // 確定前の選択色は必ず外す。pref-correct/pref-wrong と同じ !important のため、
+  // 残すと同詳細度となり CSS の記述順で勝敗が決まってしまう
+  svg.querySelectorAll(".pref-picked").forEach((el) => el.classList.remove("pref-picked"));
+
+  const ok = mapState.picked === parseInt(p.id, 10);
+  const picked = svg.querySelector(`g.prefecture[data-code="${mapState.picked}"]`);
+  if (picked) picked.classList.add(ok ? "pref-correct" : "pref-wrong");
   if (!ok) highlightPrefecture(svg, p.id, "pref-correct");
   recordMapAnswer(p.id, ok);
   showMapFeedback(ok, p);
@@ -741,6 +887,7 @@ function bindEvents() {
   // 地図（Step2）
   document.getElementById("btn-map-quit").addEventListener("click", renderHome);
   document.getElementById("btn-map-next").addEventListener("click", nextMapQuestion);
+  document.getElementById("btn-map-confirm").addEventListener("click", confirmMapAnswer);
 
   // 結果
   document.getElementById("btn-home").addEventListener("click", renderHome);

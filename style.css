@@ -331,3 +331,4 @@ input[type="text"] {
 .pref-target { fill: var(--main) !important; }
 .pref-correct { fill: var(--ok) !important; }
 .pref-wrong { fill: var(--ng) !important; }
+.pref-picked { fill: #f0a020 !important; } /* 確定前の「いま選んでいる県」 */

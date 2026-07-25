@@ -172,6 +172,7 @@ html, body {
 
 .muted { color: var(--muted); }
 .small { font-size: 13px; }
+.version-label { text-align: center; margin: 10px 0 0; }
 
 /* ============ クイズ画面 ============ */
 .quiz-top {

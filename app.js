@@ -21,6 +21,9 @@ const MAP_STEP = 2; // ばしょ（地図）ステップの番号
 const REGION_STEP = 3; // ちほう（地方3択）ステップの番号
 const WRITE_STEP = 4; // かく（書く・自己採点）ステップの番号
 const MAX_SNAP_UNITS = 60; // 地図タップの吸着上限（viewBoxユニット）。これより陸から遠いタップは無反応にする
+// アプリの表示用バージョン。中身を更新したら sw.js の CACHE と対で必ずインクリメントする
+// （ホーム画面に表示することで、iPad側で更新が反映されたか目視確認できるようにする）
+const APP_VERSION = "v3";
 
 // --- 日付ユーティリティ --------------------------------------
 /** 今日の日付を YYYY-MM-DD（ローカル時刻）で返す */
@@ -237,6 +240,7 @@ function renderHome() {
   }
 
   updateBackupReminder(todayStr());
+  document.getElementById("app-version").textContent = APP_VERSION;
   showScreen("home");
 }
 

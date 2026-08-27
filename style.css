@@ -22,7 +22,7 @@ html, body {
   padding: 0;
   background: var(--bg);
   color: var(--text);
-  font-family: "Hiragino Maru Gothic ProN", "ヒラギノ丸ゴ ProN", "Hiragino Kaku Gothic ProN", sans-serif;
+  font-family: "YuKyokasho", "游教科書体", "Klee One", "Hiragino Maru Gothic ProN", "ヒラギノ丸ゴ ProN", "Hiragino Kaku Gothic ProN", sans-serif;
   -webkit-text-size-adjust: 100%;
 }
 

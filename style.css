@@ -154,6 +154,15 @@ html, body {
   margin-bottom: 8px;
 }
 
+.update-banner {
+  text-decoration: none;
+  font-size: 14px;
+  color: #7a4a00;
+  background: #fdecc8;
+  border-radius: var(--radius);
+  margin-bottom: 8px;
+}
+
 /* --- 苦手リスト --- */
 #home-weak ul { list-style: none; margin: 0; padding: 0; }
 #home-weak li { padding: 8px 4px; border-bottom: 1px dashed #e3e8ef; display: flex; align-items: center; gap: 8px; }

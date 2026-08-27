@@ -23,7 +23,7 @@ const WRITE_STEP = 4; // かく（書く・自己採点）ステップの番号
 const MAX_SNAP_UNITS = 60; // 地図タップの吸着上限（viewBoxユニット）。これより陸から遠いタップは無反応にする
 // アプリの表示用バージョン。中身を更新したら sw.js の CACHE と対で必ずインクリメントする
 // （ホーム画面に表示することで、iPad側で更新が反映されたか目視確認できるようにする）
-const APP_VERSION = "v5";
+const APP_VERSION = "v6";
 
 // --- 日付ユーティリティ --------------------------------------
 /** 今日の日付を YYYY-MM-DD（ローカル時刻）で返す */
@@ -922,7 +922,21 @@ function main() {
 
   // PWA: service worker 登録（http/https 環境のみ。file:// では何もしない）
   if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
-    navigator.serviceWorker.register("sw.js").catch((e) => console.warn("SW登録失敗", e));
+    // すでに制御中のSWがあった状態から controller が変わった場合だけ「更新」とみなす
+    // （初回インストール時も controllerchange は発火するが、それは更新ではないので除外する）
+    const hadControllerAtLoad = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (!hadControllerAtLoad) return;
+      const btn = document.getElementById("home-update-banner");
+      if (!btn) return;
+      btn.classList.remove("hidden");
+      btn.onclick = () => location.reload();
+    });
+    navigator.serviceWorker
+      .register("sw.js")
+      // 自動更新チェックは最大24時間に1回しか走らない仕様のため、起動のたび明示的に即チェックする
+      .then((reg) => reg.update().catch(() => {}))
+      .catch((e) => console.warn("SW登録失敗", e));
   }
 }
 

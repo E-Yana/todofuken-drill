@@ -6,7 +6,9 @@
   <title>とどうふけんドリル</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Klee+One:wght@400;600&display=swap" rel="stylesheet" />
+  <!-- media="print"→"all"切替でレンダリング・スクリプト実行をブロックしない非同期読み込みにする -->
+  <!-- （素のrel=stylesheetだと通信が遅い時にscriptの実行が止まり、タップ判定が一切効かなくなる） -->
+  <link href="https://fonts.googleapis.com/css2?family=Klee+One:wght@400;600&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
   <link rel="stylesheet" href="style.css" />
   <link rel="manifest" href="manifest.webmanifest" />
   <meta name="theme-color" content="#1a4d80" />

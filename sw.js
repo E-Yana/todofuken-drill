@@ -1,6 +1,6 @@
 // service worker: オフラインで使えるよう、アプリ一式をキャッシュする
 // 中身を更新したら CACHE バージョン名を上げること（古いキャッシュを破棄）
-const CACHE = "todofuken-drill-v4";
+const CACHE = "todofuken-drill-v5";
 const ASSETS = [
   "./",
   "./index.html",
@@ -33,8 +33,10 @@ self.addEventListener("activate", (event) => {
 });
 
 // 取得はキャッシュ優先（オフライン動作)。無ければネットワーク。
+// 他オリジン（Google Fonts等）はSWを介さず素通しする（iOS Safariで横取りすると不安定になるため）
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
+  if (new URL(event.request.url).origin !== self.location.origin) return;
   event.respondWith(
     caches.match(event.request).then((cached) => cached || fetch(event.request))
   );

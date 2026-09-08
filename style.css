@@ -163,6 +163,30 @@ html, body {
   margin-bottom: 8px;
 }
 
+/* 「〇日ぶりだね」: 責めずに前向きに迎える一言（ホーム画面） */
+.away-note {
+  background: #e6f4ea;
+  border: 2px solid #8fd19e;
+  border-radius: var(--radius);
+  padding: 12px;
+  text-align: center;
+  font-weight: 700;
+  color: #1e6b34;
+  margin: 8px 0;
+}
+
+/* 達成メッセージ（結果画面・新しくマスターした数） */
+.achievement-msg {
+  background: #fff7e0;
+  border: 2px solid #ffd966;
+  border-radius: var(--radius);
+  padding: 10px;
+  text-align: center;
+  font-weight: 700;
+  color: #8a6d00;
+  margin: 10px 0 0;
+}
+
 /* --- 苦手リスト --- */
 #home-weak ul { list-style: none; margin: 0; padding: 0; }
 #home-weak li { padding: 8px 4px; border-bottom: 1px dashed #e3e8ef; display: flex; align-items: center; gap: 8px; }

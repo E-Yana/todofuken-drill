@@ -13,6 +13,7 @@ const STORE_KEY = "todofukenDrill_v1"; // localStorage のキー
 const DEFAULT_DAILY = 10; // 1日の出題数
 const DEFAULT_NEW_PER_DAY = 5; // 1日に増やす新出県の数
 const BACKUP_REMIND_DAYS = 14; // 最終バックアップからこの日数が経ったら書き出しを促す
+const AWAY_REMIND_DAYS = 5; // 最終学習からこの日数以上空いたら「〇日ぶりだね」を表示（旅行等の数日の間は責めない）
 // Leitner の箱ごとの「次に出すまでの日数」（箱が上がるほど間隔が伸びる）
 const INTERVALS = { 1: 1, 2: 2, 3: 4, 4: 7, 5: 15 };
 const MAX_BOX = 5;
@@ -23,7 +24,7 @@ const WRITE_STEP = 4; // かく（書く・自己採点）ステップの番号
 const MAX_SNAP_UNITS = 60; // 地図タップの吸着上限（viewBoxユニット）。これより陸から遠いタップは無反応にする
 // アプリの表示用バージョン。中身を更新したら sw.js の CACHE と対で必ずインクリメントする
 // （ホーム画面に表示することで、iPad側で更新が反映されたか目視確認できるようにする）
-const APP_VERSION = "v6";
+const APP_VERSION = "v7";
 
 // --- 日付ユーティリティ --------------------------------------
 /** 今日の日付を YYYY-MM-DD（ローカル時刻）で返す */
@@ -42,6 +43,12 @@ function addDays(dateStr, days) {
   const d = new Date(dateStr + "T00:00:00");
   d.setDate(d.getDate() + days);
   return toDateStr(d);
+}
+/** 2つの日付文字列(YYYY-MM-DD)の間の日数を返す */
+function daysBetween(fromStr, toStr) {
+  const a = new Date(fromStr + "T00:00:00");
+  const b = new Date(toStr + "T00:00:00");
+  return Math.round((b - a) / 86400000);
 }
 
 // --- ストア（永続化） ----------------------------------------
@@ -240,6 +247,7 @@ function renderHome() {
   }
 
   updateBackupReminder(todayStr());
+  updateAwayNote(todayStr());
   document.getElementById("app-version").textContent = APP_VERSION;
   showScreen("home");
 }
@@ -252,6 +260,36 @@ function updateBackupReminder(today) {
   const last = store.meta.lastBackup;
   const due = !last || addDays(last, BACKUP_REMIND_DAYS) <= today;
   el.classList.toggle("hidden", !(hasProgress && due));
+}
+
+/** ホームの「〇日ぶりだね」表示を更新する（本人向け・責めない前向きな一言） */
+function updateAwayNote(today) {
+  const el = document.getElementById("home-away-note");
+  if (!el) return;
+  const last = store.meta.lastStudyDate;
+  if (!last || last === today) {
+    el.classList.add("hidden");
+    return;
+  }
+  const gapDays = daysBetween(last, today);
+  if (gapDays >= AWAY_REMIND_DAYS) {
+    el.textContent = `${gapDays}日ぶりだね！またいっしょに がんばろう`;
+    el.classList.remove("hidden");
+  } else {
+    el.classList.add("hidden");
+  }
+}
+
+/** 達成メッセージ（新しくマスターした数）を結果画面に表示する。0以下なら非表示にする */
+function renderAchievement(newlyMastered, unit) {
+  const el = document.getElementById("result-achievement");
+  if (!el) return;
+  if (newlyMastered > 0) {
+    el.textContent = `🌟 新しく ${newlyMastered}${unit} マスターしたよ！`;
+    el.classList.remove("hidden");
+  } else {
+    el.classList.add("hidden");
+  }
 }
 
 // --- 配列シャッフル --------------------------------------------
@@ -505,15 +543,22 @@ function startStep(step) {
   const today = todayStr();
   const s = store.sessions[step];
   if (s && s.date === today && s.index < s.ids.length) {
-    quizState = { step, ids: s.ids, index: s.index, results: s.results || {} };
+    quizState = {
+      step,
+      ids: s.ids,
+      index: s.index,
+      results: s.results || {},
+      masteredBefore: s.masteredBefore ?? masteredForStep(step),
+    };
   } else {
     const ids = buildStepQueue(step);
     if (ids.length === 0) {
       renderHome();
       return;
     }
-    quizState = { step, ids, index: 0, results: {} };
-    store.sessions[step] = { date: today, ids, index: 0, results: {} };
+    const masteredBefore = masteredForStep(step);
+    quizState = { step, ids, index: 0, results: {}, masteredBefore };
+    store.sessions[step] = { date: today, ids, index: 0, results: {}, masteredBefore };
     saveStore();
   }
   showStepQuestion();
@@ -567,6 +612,7 @@ function gradeChoice(ok) {
     ids: quizState.ids,
     index: quizState.index,
     results: quizState.results,
+    masteredBefore: quizState.masteredBefore,
   };
   saveStore();
   document.getElementById("quiz-choice-feedback-msg").textContent = buildChoiceFeedback(
@@ -614,6 +660,7 @@ function gradeWrite(ok) {
     ids: quizState.ids,
     index: quizState.index,
     results: quizState.results,
+    masteredBefore: quizState.masteredBefore,
   };
   saveStore();
   if (quizState.index >= quizState.ids.length) {
@@ -624,7 +671,7 @@ function gradeWrite(ok) {
 }
 
 function finishSession() {
-  finishStepSession(quizState.ids, quizState.results);
+  finishStepSession(quizState.ids, quizState.results, quizState.step, quizState.masteredBefore);
 }
 
 // ============================================================
@@ -638,15 +685,21 @@ function startMapStep() {
   const today = todayStr();
   const s = store.sessions[MAP_STEP];
   if (s && s.date === today && s.index < s.ids.length) {
-    mapState = { ids: s.ids, index: s.index, results: s.results || {} };
+    mapState = {
+      ids: s.ids,
+      index: s.index,
+      results: s.results || {},
+      masteredBefore: s.masteredBefore ?? masteredForStep(MAP_STEP),
+    };
   } else {
     const ids = buildStepQueue(MAP_STEP);
     if (ids.length === 0) {
       renderHome();
       return;
     }
-    mapState = { ids, index: 0, results: {} };
-    store.sessions[MAP_STEP] = { date: today, ids, index: 0, results: {} };
+    const masteredBefore = masteredForStep(MAP_STEP);
+    mapState = { ids, index: 0, results: {}, masteredBefore };
+    store.sessions[MAP_STEP] = { date: today, ids, index: 0, results: {}, masteredBefore };
     saveStore();
   }
   showMapQuestion();
@@ -741,6 +794,7 @@ function recordMapAnswer(prefId, ok) {
     ids: mapState.ids,
     index: mapState.index,
     results: mapState.results,
+    masteredBefore: mapState.masteredBefore,
   };
   saveStore();
 }
@@ -762,12 +816,13 @@ function nextMapQuestion() {
 }
 
 function finishMapSession() {
-  finishStepSession(mapState.ids, mapState.results);
+  finishStepSession(mapState.ids, mapState.results, MAP_STEP, mapState.masteredBefore);
 }
 
 // --- 結果画面（Step1〜4共通） ---------------------------------
-/** 連続日数の更新とスコア表示。ids/results はステップ問わず共通形式 */
-function finishStepSession(ids, results) {
+/** 連続日数の更新とスコア表示。ids/results はステップ問わず共通形式。
+ *  step/masteredBefore は達成メッセージ（そのStepで新しくマスターした県数）の算出に使う */
+function finishStepSession(ids, results, step, masteredBefore) {
   const today = todayStr();
   if (store.meta.lastStudyDate !== today) {
     if (store.meta.lastStudyDate === addDays(today, -1)) {
@@ -790,6 +845,10 @@ function finishStepSession(ids, results) {
   else msg = "まちがえた県は明日また出るよ。だいじょうぶ！";
   document.getElementById("result-msg").textContent = msg;
   document.getElementById("result-streak").textContent = `🔥 連続 ${store.meta.streak} 日`;
+
+  // 達成メッセージ（そのStepで新しくマスターした県の数だけを前向きに伝える。正答率は見せない）
+  const masteredAfter = masteredForStep(step);
+  renderAchievement(masteredAfter - (masteredBefore ?? masteredAfter), "けん");
 
   const wrong = ids
     .filter((id) => results[id] === "x")

@@ -24,7 +24,7 @@ const WRITE_STEP = 4; // かく（書く・自己採点）ステップの番号
 const MAX_SNAP_UNITS = 60; // 地図タップの吸着上限（viewBoxユニット）。これより陸から遠いタップは無反応にする
 // アプリの表示用バージョン。中身を更新したら sw.js の CACHE と対で必ずインクリメントする
 // （ホーム画面に表示することで、iPad側で更新が反映されたか目視確認できるようにする）
-const APP_VERSION = "v7";
+const APP_VERSION = "v8";
 
 // --- 日付ユーティリティ --------------------------------------
 /** 今日の日付を YYYY-MM-DD（ローカル時刻）で返す */
@@ -221,12 +221,14 @@ function showScreen(name) {
 
 // --- ホーム画面 ----------------------------------------------
 function renderHome() {
+  const total = window.PREFECTURES.length;
   document.getElementById("home-streak").textContent = store.meta.streak || 0;
   document.getElementById("home-mastered").textContent = totalMastered();
+  document.getElementById("home-total").textContent = total;
 
   [READING_STEP, MAP_STEP, REGION_STEP, WRITE_STEP].forEach((step) => {
     const el = document.getElementById("progress-" + step);
-    if (el) el.textContent = `${masteredForStep(step)}/47`;
+    if (el) el.textContent = `${masteredForStep(step)}/${total}`;
   });
 
   const weak = weakList(5);

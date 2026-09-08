@@ -24,7 +24,7 @@ const WRITE_STEP = 4; // かく（書く・自己採点）ステップの番号
 const MAX_SNAP_UNITS = 60; // 地図タップの吸着上限（viewBoxユニット）。これより陸から遠いタップは無反応にする
 // アプリの表示用バージョン。中身を更新したら sw.js の CACHE と対で必ずインクリメントする
 // （ホーム画面に表示することで、iPad側で更新が反映されたか目視確認できるようにする）
-const APP_VERSION = "v8";
+const APP_VERSION = "v9";
 
 // --- 日付ユーティリティ --------------------------------------
 /** 今日の日付を YYYY-MM-DD（ローカル時刻）で返す */
@@ -185,6 +185,22 @@ function masteredForStep(step) {
     return c && c.box >= 4;
   }).length;
 }
+/** 指定ステップで一度でも学習した県数（履歴あり）。正解しても減らないので初日から動く指標 */
+function touchedForStep(step) {
+  return window.PREFECTURES.filter((p) => {
+    const c = store.progress[cardId(step, p.id)];
+    return c && c.history.length > 0;
+  }).length;
+}
+/** いずれかのステップで一度でも学習した県数 */
+function touchedAny() {
+  return window.PREFECTURES.filter((p) =>
+    [READING_STEP, MAP_STEP, REGION_STEP, WRITE_STEP].some((step) => {
+      const c = store.progress[cardId(step, p.id)];
+      return c && c.history.length > 0;
+    })
+  ).length;
+}
 /** Step1〜4すべてマスター済みの県数（＝完全に覚えた県） */
 function totalMastered() {
   return window.PREFECTURES.filter((p) =>
@@ -225,10 +241,17 @@ function renderHome() {
   document.getElementById("home-streak").textContent = store.meta.streak || 0;
   document.getElementById("home-mastered").textContent = totalMastered();
   document.getElementById("home-total").textContent = total;
+  document.getElementById("home-touched").textContent = touchedAny();
+  document.getElementById("home-touched-total").textContent = total;
 
+  // Step別は「まなんだ県/47」を主に出す（マスターは箱4以上＝3回正解が必要で、
+  // 学習し始めの時期は全部0になり実態と合わないため）。マスターは⭐で併記する
   [READING_STEP, MAP_STEP, REGION_STEP, WRITE_STEP].forEach((step) => {
     const el = document.getElementById("progress-" + step);
-    if (el) el.textContent = `${masteredForStep(step)}/${total}`;
+    if (!el) return;
+    const mastered = masteredForStep(step);
+    const star = mastered > 0 ? `⭐${mastered} ` : "";
+    el.textContent = `${star}${touchedForStep(step)}/${total}`;
   });
 
   const weak = weakList(5);

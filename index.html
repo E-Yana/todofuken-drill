@@ -72,8 +72,10 @@
       <div id="home-weak"></div>
     </div>
 
-    <button id="home-backup-reminder" class="text-btn backup-reminder hidden">💾 そろそろ きろくを 書き出して おくと安心です（タップ）</button>
-    <button id="btn-backup" class="text-btn">💾 きろくの 書き出し・よみこみ</button>
+    <button id="home-backup-reminder" class="text-btn backup-reminder hidden">💾 そろそろ きろくを ほぞんして おくと安心です（タップ）</button>
+    <button id="btn-backup" class="text-btn">💾 きろくを ほぞん</button>
+    <p id="home-backup-status" class="form-msg"></p>
+    <button id="btn-backup-restore" class="text-btn">きろくの ふくげん（よみこみ）</button>
     <p id="app-version" class="muted small version-label"></p>
   </section>
 
@@ -157,10 +159,11 @@
 
   <!-- ============ バックアップ画面 ============ -->
   <section id="screen-backup" class="screen hidden">
-    <header class="app-header"><h1>きろくの 書き出し・よみこみ</h1></header>
+    <header class="app-header"><h1>きろくの ほぞん・ふくげん</h1></header>
     <div class="panel">
-      <p class="muted small">きろくは この端末だけに ほぞんされます。きしゅへんこうの前などに 書き出しておくと安心です。</p>
-      <button id="btn-export" class="mid-btn">きろくを 書き出す</button>
+      <p class="muted small">きろくは この端末だけに ほぞんされます。きしゅへんこうの前などに ほぞんしておくと安心です。「ファイルに ほぞん」→「ドライブ」を えらんでね。</p>
+      <button id="btn-export" class="mid-btn">きろくを ほぞん</button>
+      <p id="backup-status" class="form-msg"></p>
       <label class="restore-label">きろくを よみこむ（ふくげん）
         <input id="restore-file" type="file" accept="application/json,.json" />
       </label>
@@ -399,6 +402,7 @@
 
 <script src="regions_data.js"></script>
 <script src="prefectures_data.js"></script>
+<script src="backup.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

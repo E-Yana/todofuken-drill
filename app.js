@@ -26,9 +26,14 @@ const WRITE_STEP = 4; // かく（書く・自己採点）ステップの番号
 const MAX_SNAP_UNITS = 60; // 地図タップの吸着上限（viewBoxユニット）。これより陸から遠いタップは無反応にする
 // アプリの表示用バージョン。中身を更新したら sw.js の CACHE と対で必ずインクリメントする
 // （ホーム画面に表示することで、iPad側で更新が反映されたか目視確認できるようにする）
-const APP_VERSION = "v11";
+const APP_VERSION = "v12";
 const BACKUP_APP_ID = "todofuken-drill"; // バックアップJSONの app 値
-const LAST_BACKUP_KEY = "todofukenDrill_lastBackup"; // 共有/ダウンロードを実行した日（Drive保存の保証ではない）
+// 受け口が ok を返した日、または共有/ダウンロードを実行した日。Drive に入った保証は受け口 ok の時のみ
+const LAST_BACKUP_KEY = "todofukenDrill_lastBackup";
+const DRIVE_SYNC_KEY = "todofukenDrill_driveSync"; // ドライブ受け口の設定 {url, token}（記録とは別キー）
+const DRIVE_TIMEOUT_MS = 15000; // 受け口への送信の時間切れ
+const MSG_DRIVE_OK = "ドライブに ほぞんしました";
+const MSG_DRIVE_FAILED = "ドライブに ほぞんできませんでした。もう一度 おすと ファイルで ほぞん";
 const RESTORE_KEY_PREFIX = "todofukenDrill_v1_restore_"; // 復元前の退避キー（+日付）
 const WEAK_TOP_N = 10; // バックアップ要約に載せる苦手の件数
 const ALL_STEPS = [READING_STEP, MAP_STEP, REGION_STEP, WRITE_STEP]; // 全ステップ
@@ -986,8 +991,73 @@ function showBackupStatus(text, ok = true) {
   setBackupStatus("backup-status", text, ok);
 }
 
-/** きろくを保存する（共有シート → 不可・失敗ならダウンロード） */
+let fileFallbackPending = false; // ドライブ送信に失敗済み＝次のタップで共有/ダウンロードを開く
+let driveBusy = false; // ドライブ送信中の二重タップ防止
+
+/** 受け口へ送って ok:true を読めた時だけ true を返す（時間切れ・オフライン・非200・壊れた応答は false）。 */
+async function sendToDrive(settings, backup, kind) {
+  const req = DrillBackup.buildDriveRequest(settings, backup, kind);
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), DRIVE_TIMEOUT_MS);
+  try {
+    const res = await fetch(req.url, Object.assign({ signal: ctrl.signal }, req.options));
+    if (!res.ok) return false;
+    return DrillBackup.parseDriveResponse(await res.text()).ok;
+  } catch (e) {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** 保存結果の後始末（保存日を記録し、促しを更新する）。成功した時だけ呼ぶ */
+function finishBackup(msg) {
+  showBackupStatus(msg);
+  setLastBackup();
+  updateBackupReminder(todayStr());
+}
+
+/** 従来の経路（共有シート → 不可・失敗ならダウンロード）。挙動は変えない。 */
+async function saveBackupAsFile(file) {
+  try {
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file] });
+      finishBackup(MSG_BACKUP_SHARED);
+    } else {
+      downloadFile(file);
+      finishBackup(MSG_BACKUP_DOWNLOADED);
+    }
+  } catch (e) {
+    if (e && e.name === "AbortError") return; // とちゅうで やめた
+    try {
+      downloadFile(file);
+      finishBackup(MSG_BACKUP_DOWNLOADED);
+    } catch (e2) {
+      showBackupStatus(MSG_BACKUP_FAILED, false);
+    }
+  }
+}
+
+/** ドライブ設定済みなら送信。失敗時は保存日の記録も共有も行わず、次のタップで従来経路へ。 */
+async function saveBackupToDrive(settings, backup) {
+  driveBusy = true;
+  showBackupStatus("ドライブに ほぞんしています…");
+  try {
+    if (await sendToDrive(settings, backup, "backup")) {
+      fileFallbackPending = false;
+      finishBackup(MSG_DRIVE_OK);
+    } else {
+      fileFallbackPending = true;
+      showBackupStatus(MSG_DRIVE_FAILED, false);
+    }
+  } finally {
+    driveBusy = false;
+  }
+}
+
+/** きろくを保存する（ドライブ設定済みなら受け口へ。未設定・失敗の次のタップは共有シート/ダウンロード） */
 async function saveBackup() {
+  if (driveBusy) return;
   const today = todayStr();
   const backup = DrillBackup.buildBackup({
     appId: BACKUP_APP_ID,
@@ -999,27 +1069,84 @@ async function saveBackup() {
   const file = new File([JSON.stringify(backup, null, 2)], DrillBackup.backupFileName(BACKUP_APP_ID, today), {
     type: "application/json",
   });
-  const done = (msg) => {
-    showBackupStatus(msg);
-    setLastBackup();
-    updateBackupReminder(todayStr());
-  };
+  const settings = DrillBackup.parseDriveSettings(safeGetDriveSync());
+  if (!settings || fileFallbackPending) {
+    // 未設定、または直前のドライブ送信が失敗＝今のタップで従来経路を開く
+    fileFallbackPending = false;
+    await saveBackupAsFile(file);
+    return;
+  }
+  await saveBackupToDrive(settings, backup);
+}
+
+// ---- ドライブの設定欄 ----
+
+/** 設定の生文字列を読む（読めなければ null） */
+function safeGetDriveSync() {
   try {
-    if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      await navigator.share({ files: [file] });
-      done(MSG_BACKUP_SHARED);
-    } else {
-      downloadFile(file);
-      done(MSG_BACKUP_DOWNLOADED);
-    }
+    return localStorage.getItem(DRIVE_SYNC_KEY);
   } catch (e) {
-    if (e && e.name === "AbortError") return; // とちゅうで やめた
-    try {
-      downloadFile(file);
-      done(MSG_BACKUP_DOWNLOADED);
-    } catch (e2) {
-      showBackupStatus(MSG_BACKUP_FAILED, false);
-    }
+    return null;
+  }
+}
+
+function setDriveStatus(text, ok = true) {
+  setBackupStatus("drive-status", text, ok);
+}
+
+function loadDriveForm() {
+  const s = DrillBackup.parseDriveSettings(safeGetDriveSync());
+  document.getElementById("drive-url").value = s ? s.url : "";
+  document.getElementById("drive-token").value = s ? s.token : "";
+}
+
+function readDriveForm() {
+  return DrillBackup.parseDriveSettings(
+    JSON.stringify({
+      url: document.getElementById("drive-url").value,
+      token: document.getElementById("drive-token").value,
+    }),
+  );
+}
+
+function saveDriveSettings() {
+  const s = readDriveForm();
+  if (!s) {
+    setDriveStatus("URLか あいことばが ただしくありません。ほぞんしませんでした", false);
+    return;
+  }
+  try {
+    localStorage.setItem(DRIVE_SYNC_KEY, JSON.stringify(s));
+  } catch (e) {
+    setDriveStatus("せっていを ほぞんできませんでした", false);
+    return;
+  }
+  fileFallbackPending = false;
+  setDriveStatus("せっていを ほぞんしました");
+}
+
+/** 本物のバックアップを kind:"test" で送る（latest を汚さない） */
+async function testDrive() {
+  if (driveBusy) return;
+  const s = readDriveForm();
+  if (!s) {
+    setDriveStatus("URLか あいことばが ただしくありません", false);
+    return;
+  }
+  driveBusy = true;
+  setDriveStatus("ためしています…");
+  try {
+    const backup = DrillBackup.buildBackup({
+      appId: BACKUP_APP_ID,
+      appVersion: APP_VERSION,
+      today: todayStr(),
+      summary: buildBackupSummary(),
+      state: store,
+    });
+    const ok = await sendToDrive(s, backup, "test");
+    setDriveStatus(ok ? "ためしに ほぞんできました" : "ためしに ほぞんできませんでした", ok);
+  } finally {
+    driveBusy = false;
   }
 }
 
@@ -1121,6 +1248,8 @@ function bindEvents() {
 
   // バックアップ
   document.getElementById("btn-export").addEventListener("click", saveBackup);
+  document.getElementById("drive-save").addEventListener("click", saveDriveSettings);
+  document.getElementById("drive-test").addEventListener("click", testDrive);
   document.getElementById("restore-file").addEventListener("change", (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -1135,6 +1264,7 @@ function bindEvents() {
 
 function main() {
   bindEvents();
+  loadDriveForm();
   renderHome();
 
   // ストレージ永続化を要求（iOS の自動削除を受けにくくする。失敗しても動作に影響なし）

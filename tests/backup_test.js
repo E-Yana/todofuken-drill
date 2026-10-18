@@ -124,6 +124,70 @@ test("退避キーは新しい2本だけ残る（3回復元しても2本）", ()
   assert.ok(s.getItem(STORE_KEY) !== null);
 });
 
+// ---- ドライブ自動保存（テスト用URLは example.invalid のみ） ----
+const DUMMY_SETTINGS = { url: "https://example.invalid/exec", token: "dummy-token" };
+const DUMMY_BACKUP = { app: APP_ID, format: 1, summary: {}, state: { progress: {} } };
+
+test("ドライブ送信は text/plain で独自ヘッダーなし", () => {
+  const r = B.buildDriveRequest(DUMMY_SETTINGS, DUMMY_BACKUP, "backup");
+  assert.strictEqual(r.url, DUMMY_SETTINGS.url);
+  assert.strictEqual(r.options.method, "POST");
+  assert.deepStrictEqual(Object.keys(r.options.headers), ["Content-Type"]);
+  assert.strictEqual(r.options.headers["Content-Type"], "text/plain;charset=utf-8");
+});
+
+test("ドライブ送信の本文は token・app・kind・content（文字列）", () => {
+  const r = B.buildDriveRequest(DUMMY_SETTINGS, DUMMY_BACKUP, "test");
+  const body = JSON.parse(r.options.body);
+  assert.deepStrictEqual(Object.keys(body).sort(), ["app", "content", "kind", "token"]);
+  assert.strictEqual(body.token, "dummy-token");
+  assert.strictEqual(body.app, APP_ID);
+  assert.strictEqual(body.kind, "test");
+  assert.deepStrictEqual(JSON.parse(body.content), DUMMY_BACKUP);
+});
+
+test("ドライブ送信の kind が不正なら例外", () => {
+  assert.throws(() => B.buildDriveRequest(DUMMY_SETTINGS, DUMMY_BACKUP, "other"));
+});
+
+test("ドライブ応答は ok:true だけが成功", () => {
+  assert.strictEqual(B.parseDriveResponse('{"ok":true}').ok, true);
+  assert.strictEqual(B.parseDriveResponse('{"ok":false}').ok, false);
+  assert.strictEqual(B.parseDriveResponse('{"ok":"true"}').ok, false);
+  assert.strictEqual(B.parseDriveResponse("{}").ok, false);
+});
+
+test("ドライブ応答が壊れている・空なら失敗", () => {
+  ["", "<html>error</html>", "{broken", "null", "[]", undefined].forEach((t) => {
+    assert.strictEqual(B.parseDriveResponse(t).ok, false);
+  });
+});
+
+test("ドライブ設定が正しければ url と token を返す", () => {
+  const raw = JSON.stringify({ url: "https://script.google.com/exec-example", token: "dummy-token" });
+  assert.deepStrictEqual(B.parseDriveSettings(raw), {
+    url: "https://script.google.com/exec-example",
+    token: "dummy-token",
+  });
+});
+
+test("ドライブ設定が不正なら null", () => {
+  const bad = [
+    null,
+    "",
+    "{broken",
+    "[]",
+    JSON.stringify({ url: "http://script.google.com/exec-example", token: "t" }), // https でない
+    JSON.stringify({ url: "https://example.invalid/exec", token: "t" }), // 受け口のホストでない
+    JSON.stringify({ url: "not a url", token: "t" }),
+    JSON.stringify({ url: "https://script.google.com/exec-example", token: "" }),
+    JSON.stringify({ url: "https://script.google.com/exec-example", token: "   " }),
+    JSON.stringify({ url: "https://script.google.com/exec-example" }),
+    JSON.stringify({ token: "t" }),
+  ];
+  bad.forEach((raw) => assert.strictEqual(B.parseDriveSettings(raw), null));
+});
+
 if (failed > 0) {
   console.log(failed + " 件失敗");
   process.exit(1);

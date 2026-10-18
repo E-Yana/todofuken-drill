@@ -11,11 +11,13 @@
 // --- 定数 -----------------------------------------------------
 const STORE_KEY = "todofukenDrill_v1"; // localStorage のキー
 const DEFAULT_DAILY = 10; // 1日の出題数
-const DEFAULT_NEW_PER_DAY = 5; // 1日に増やす新出県の数
+const DEFAULT_NEW_PER_DAY = 5; // 1日に増やす新出県の目標数（苦手が少なければ超えて出る）
+const NEW_MIN = 2; // 各ステップで1日に最低これだけ新出を入れる（在庫がある時）
+const MASTERED_CAP = 2; // 定着済み（箱4以上）の復習の1日の目安上限
 const BACKUP_REMIND_DAYS = 14; // 最終バックアップからこの日数が経ったら書き出しを促す
 const AWAY_REMIND_DAYS = 5; // 最終学習からこの日数以上空いたら「〇日ぶりだね」を表示（旅行等の数日の間は責めない）
 // Leitner の箱ごとの「次に出すまでの日数」（箱が上がるほど間隔が伸びる）
-const INTERVALS = { 1: 1, 2: 2, 3: 4, 4: 7, 5: 15 };
+const INTERVALS = { 1: 1, 2: 2, 3: 4, 4: 7, 5: 30 };
 const MAX_BOX = 5;
 const READING_STEP = 1; // よみ（読み方3択）ステップの番号
 const MAP_STEP = 2; // ばしょ（地図）ステップの番号
@@ -24,7 +26,7 @@ const WRITE_STEP = 4; // かく（書く・自己採点）ステップの番号
 const MAX_SNAP_UNITS = 60; // 地図タップの吸着上限（viewBoxユニット）。これより陸から遠いタップは無反応にする
 // アプリの表示用バージョン。中身を更新したら sw.js の CACHE と対で必ずインクリメントする
 // （ホーム画面に表示することで、iPad側で更新が反映されたか目視確認できるようにする）
-const APP_VERSION = "v10";
+const APP_VERSION = "v11";
 const BACKUP_APP_ID = "todofuken-drill"; // バックアップJSONの app 値
 const LAST_BACKUP_KEY = "todofukenDrill_lastBackup"; // 共有/ダウンロードを実行した日（Drive保存の保証ではない）
 const RESTORE_KEY_PREFIX = "todofukenDrill_v1_restore_"; // 復元前の退避キー（+日付）
@@ -134,15 +136,15 @@ function getCard(id) {
 
 // --- 出題キューの組み立て（mistake-weighted SRS） ------------
 /**
- * 指定ステップの今日出す県IDの配列を作る。
- *   1. 復習（既出で期限到来）を優先（箱小→間違い多い順）
- *   2. 新規（未学習）を、北→南の地方順で newPerDay 件まで
- *   3. 全体を dailyCount で切る
+ * 指定ステップの今日出す県IDの配列を作る（配分は queue.js の composeDaily）。
+ *   苦手＝期限が来た箱1〜3／定着＝期限が来た箱4以上／新出＝未出題（北→南の地方順）
+ *   1. 新出の最低数と定着1問を確保 2. 苦手で埋める 3. 新出を目標数まで
+ *   4. 定着を上限まで 5. 余りは新出、それでも余れば定着で埋める
+ *   表示順は 苦手→定着→新出。戻り値は県id（カードidではない）
  */
 function buildStepQueue(step) {
-  const today = todayStr();
-  const dailyCount = store.meta.settings.dailyCount || DEFAULT_DAILY;
-  const newPerDay = store.meta.settings.newPerDay ?? DEFAULT_NEW_PER_DAY;
+  const daily = store.meta.settings.dailyCount || DEFAULT_DAILY;
+  const newTarget = store.meta.settings.newPerDay ?? DEFAULT_NEW_PER_DAY;
 
   const sorted = window.PREFECTURES.slice().sort((a, b) => {
     const ra = regionOrder(a.region);
@@ -151,26 +153,25 @@ function buildStepQueue(step) {
     return a.id.localeCompare(b.id);
   });
 
-  const pool = sorted.map((p, idx) => ({
-    p,
-    c: getCard(cardId(step, p.id)),
-    idx,
-  }));
-
-  const reviews = pool
-    .filter((x) => x.c.history.length > 0 && x.c.dueDate <= today)
-    .sort((a, b) => {
-      if (a.c.box !== b.c.box) return a.c.box - b.c.box; // 苦手(箱小)を先に
-      return b.c.wrongCount - a.c.wrongCount; // 間違い回数が多い順
-    });
-
-  const fresh = pool
-    .filter((x) => x.c.history.length === 0)
-    .sort((a, b) => a.idx - b.idx);
-  const freshCapped = fresh.slice(0, newPerDay);
-
-  const ordered = [...reviews, ...freshCapped];
-  return ordered.slice(0, dailyCount).map((x) => x.p.id);
+  const items = sorted.map((p, idx) => {
+    const c = getCard(cardId(step, p.id));
+    return {
+      id: p.id,
+      box: c.box,
+      dueDate: c.dueDate,
+      wrongCount: c.wrongCount,
+      tier: 0,
+      idx,
+      seen: c.history.length > 0,
+    };
+  });
+  return window.DrillQueue.composeDaily(items, {
+    today: todayStr(),
+    daily,
+    newMin: NEW_MIN,
+    newTarget,
+    masteredCap: MASTERED_CAP,
+  });
 }
 
 // --- 回答の記録（SRS更新） -----------------------------------

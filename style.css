@@ -118,6 +118,20 @@ html, body {
 }
 .step-progress { font-size: 14px; font-weight: 600; opacity: 0.85; }
 .step-btn.locked { background: #e3e8ef; color: var(--muted); }
+/* 今日の分が終わったステップ（押せるが「済んだ」と分かる緑） */
+.big-btn.primary.step-btn.done { background: var(--ok); box-shadow: 0 4px 0 #1f6b40; }
+.step-btn.done .step-progress { opacity: 1; }
+/* 今日の分が終わったステップを押した時のお知らせ */
+.step-done-msg {
+  margin: 12px 0 0;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  background: #e6f4ec;
+  color: #1f6b40;
+  font-size: 18px;
+  font-weight: 700;
+  text-align: center;
+}
 
 .mid-btn {
   padding: 12px 18px;

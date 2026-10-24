@@ -23,10 +23,11 @@ const READING_STEP = 1; // よみ（読み方3択）ステップの番号
 const MAP_STEP = 2; // ばしょ（地図）ステップの番号
 const REGION_STEP = 3; // ちほう（地方3択）ステップの番号
 const WRITE_STEP = 4; // かく（書く・自己採点）ステップの番号
+const STEP_LABELS = { 1: "よみ", 2: "ばしょ", 3: "ちほう", 4: "かく" }; // お知らせ文言用のステップ名
 const MAX_SNAP_UNITS = 60; // 地図タップの吸着上限（viewBoxユニット）。これより陸から遠いタップは無反応にする
 // アプリの表示用バージョン。中身を更新したら sw.js の CACHE と対で必ずインクリメントする
 // （ホーム画面に表示することで、iPad側で更新が反映されたか目視確認できるようにする）
-const APP_VERSION = "v12";
+const APP_VERSION = "v13";
 const BACKUP_APP_ID = "todofuken-drill"; // バックアップJSONの app 値
 // 受け口が ok を返した日、または共有/ダウンロードを実行した日。Drive に入った保証は受け口 ok の時のみ
 const LAST_BACKUP_KEY = "todofukenDrill_lastBackup";
@@ -211,6 +212,46 @@ function touchedForStep(step) {
     return c && c.history.length > 0;
   }).length;
 }
+/** そのステップで今日やる問題が残っているか（途中のセッション、または新しく組める出題がある） */
+function hasStepWorkToday(step) {
+  const s = store.sessions[step];
+  if (s && s.date === todayStr() && s.index < s.ids.length) return true;
+  return buildStepQueue(step).length > 0;
+}
+/** 出題済みの県のうち、今日より後でいちばん早い復習日（YYYY-MM-DD）。無ければ null */
+function nextDueForStep(step) {
+  const today = todayStr();
+  let next = null;
+  window.PREFECTURES.forEach((p) => {
+    const c = store.progress[cardId(step, p.id)];
+    if (!c || c.history.length === 0 || c.dueDate <= today) return;
+    if (next === null || c.dueDate < next) next = c.dueDate;
+  });
+  return next;
+}
+/** YYYY-MM-DD を「10/25」の形にする */
+function formatMonthDay(dateStr) {
+  const [, m, d] = dateStr.split("-");
+  return `${parseInt(m, 10)}/${parseInt(d, 10)}`;
+}
+/** 今日の分が終わった時にホームへ出すお知らせ文 */
+function stepDoneMessage(step) {
+  const next = nextDueForStep(step);
+  const nextText = next ? ` つぎは ${formatMonthDay(next)} だよ` : "";
+  return `🎉 きょうの ${STEP_LABELS[step]}は おわり！${nextText}`;
+}
+/** ホームのお知らせを書き換える（空文字で消す） */
+function setHomeStepMsg(text) {
+  const el = document.getElementById("home-step-msg");
+  el.textContent = text;
+  el.classList.toggle("hidden", text === "");
+}
+/** 出題が0件の時：ホームを描き直した後にお知らせを出す（逆順だと renderHome が消してしまう） */
+function showStepDone(step) {
+  renderHome();
+  setHomeStepMsg(stepDoneMessage(step));
+}
+
 /** いずれかのステップで一度でも学習した県数 */
 function touchedAny() {
   return window.PREFECTURES.filter((p) =>
@@ -256,6 +297,7 @@ function showScreen(name) {
 
 // --- ホーム画面 ----------------------------------------------
 function renderHome() {
+  setHomeStepMsg("");
   const total = window.PREFECTURES.length;
   document.getElementById("home-streak").textContent = store.meta.streak || 0;
   document.getElementById("home-mastered").textContent = totalMastered();
@@ -270,7 +312,17 @@ function renderHome() {
     if (!el) return;
     const mastered = masteredForStep(step);
     const star = mastered > 0 ? `⭐${mastered} ` : "";
-    el.textContent = `${star}${touchedForStep(step)}/${total}`;
+    const count = `${star}${touchedForStep(step)}/${total}`;
+    // 今日の分が終わったステップは、押しても問題が出ないことがボタンで分かるようにする
+    const done = !hasStepWorkToday(step);
+    document.getElementById("btn-step-" + step).classList.toggle("done", done);
+    if (done) {
+      const next = nextDueForStep(step);
+      const nextText = next ? `・つぎ ${formatMonthDay(next)}` : "";
+      el.textContent = `✅ きょうは おわり${nextText}｜${count}`;
+    } else {
+      el.textContent = count;
+    }
   });
 
   const weak = weakList(5);
@@ -617,7 +669,7 @@ function startStep(step) {
   } else {
     const ids = buildStepQueue(step);
     if (ids.length === 0) {
-      renderHome();
+      showStepDone(step);
       return;
     }
     const masteredBefore = masteredForStep(step);
@@ -758,7 +810,7 @@ function startMapStep() {
   } else {
     const ids = buildStepQueue(MAP_STEP);
     if (ids.length === 0) {
-      renderHome();
+      showStepDone(MAP_STEP);
       return;
     }
     const masteredBefore = masteredForStep(MAP_STEP);

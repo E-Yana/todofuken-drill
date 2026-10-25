@@ -25,6 +25,7 @@
   var TIER_PRIORITY = 0; // 重点（県庁所在地の漢字が県名と違う県）
   var TIER_NORMAL = 1; // 通常
   var ID_RADIX = 10; // 県番号の基数
+  var HIRAGANA_ONLY = /^[\u3041-\u3096\u30fc]+$/; // ひらがなだけの文字列（「ー」を含む）
 
   /** 履歴の1件が正解/不正解のどちらかか（壊れた記録は飛ばすための判定） */
   function isKnownResult(entry) {
@@ -152,7 +153,17 @@
     return picked;
   }
 
-  /** ⑤の重点の層（県庁所在地の漢字が県名と違う県が先） */
+  /** 県庁所在地の表記がひらがなだけか（⑥で「ひらがなで書こう」に切り替える県。さいたま市） */
+  function capitalIsKanaOnly(pref) {
+    return HIRAGANA_ONLY.test(pref.capital);
+  }
+
+  /** ⑥の答えに「県名と おなじ 字」を添える県か（県庁所在地の漢字が県名と同じ県。東京都を含む） */
+  function capitalSharesKanji(pref) {
+    return !pref.capitalDiffers;
+  }
+
+  /** ⑤⑥の重点の層（県庁所在地の漢字が県名と違う県が先） */
   function capitalTier(pref) {
     return pref.capitalDiffers ? TIER_PRIORITY : TIER_NORMAL;
   }
@@ -183,6 +194,8 @@
     capitalWithReading: capitalWithReading,
     capitalDistractors: capitalDistractors,
     capitalTier: capitalTier,
+    capitalIsKanaOnly: capitalIsKanaOnly,
+    capitalSharesKanji: capitalSharesKanji,
     newlyMasteredCount: newlyMasteredCount,
   };
 

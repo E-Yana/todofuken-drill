@@ -158,6 +158,20 @@ test("capital_tier_18", () => {
   assert.strictEqual(P.capitalTier(byId("02")), 1);
 });
 
+test("capital_kana_only_is_saitama_only", () => {
+  const kana = PREFS.filter((p) => P.capitalIsKanaOnly(p));
+  assert.deepStrictEqual(kana.map((p) => p.id), ["11"]);
+  assert.strictEqual(P.capitalIsKanaOnly(byId("03")), false);
+});
+
+test("same_kanji_note_for_29", () => {
+  const same = PREFS.filter((p) => P.capitalSharesKanji(p));
+  assert.strictEqual(same.length, 29);
+  assert.ok(same.some((p) => p.id === "13")); // 東京都を含む
+  same.forEach((p) => assert.strictEqual(p.capitalDiffers, false));
+  assert.strictEqual(P.capitalSharesKanji(byId("11")), false); // さいたまは添えない
+});
+
 test("newly_mastered_today", () => {
   const histories = [
     [...hist("oo", "2026-10-24"), ...hist("o", TODAY)], // 今日はじめて箱4 -> 数える

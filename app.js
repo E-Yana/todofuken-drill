@@ -49,7 +49,7 @@ const KEY_EMPTY_ICON = "⬜"; // まだの鍵
 const MAX_SNAP_UNITS = 60; // 地図タップの吸着上限（viewBoxユニット）。これより陸から遠いタップは無反応にする
 // アプリの表示用バージョン。中身を更新したら sw.js の CACHE と対で必ずインクリメントする
 // （ホーム画面に表示することで、iPad側で更新が反映されたか目視確認できるようにする）
-const APP_VERSION = "v15";
+const APP_VERSION = "v16";
 const BACKUP_APP_ID = "todofuken-drill"; // バックアップJSONの app 値
 // 受け口が ok を返した日、または共有/ダウンロードを実行した日。Drive に入った保証は受け口 ok の時のみ
 const LAST_BACKUP_KEY = "todofukenDrill_lastBackup";
@@ -69,6 +69,11 @@ const ALL_STEPS = [
   COMBINED_STEP,
 ]; // 全ステップ
 const CORE_STEPS = [READING_STEP, MAP_STEP, REGION_STEP, WRITE_STEP]; // 「かんぺき」の対象（①〜④）
+const CAPITAL_STEPS = [CAPITAL_STEP, CAPITAL_WRITE_STEP]; // 県庁所在地を扱う単元（重点出題の対象）
+const WRITE_STEPS = [WRITE_STEP, CAPITAL_WRITE_STEP]; // 紙に書いて自己採点する単元
+const WRITE_INSTRUCTION_PREF = "よみを 見て、県の名前を 紙に かんじで 書こう"; // ④の指示文
+const WRITE_INSTRUCTION_CAPITAL = "この けんの けんちょうしょざいちを 紙に かんじで 書こう"; // ⑥の指示文
+const WRITE_INSTRUCTION_CAPITAL_KANA = "この けんの けんちょうしょざいちを 紙に ひらがなで 書こう"; // ⑥のさいたま用
 const COLOR_STEPS = [...CORE_STEPS, CAPITAL_STEP, CAPITAL_WRITE_STEP]; // ぬりえと⑦の鍵の対象（①〜⑥）
 const STAR_MIN_BOX = 4; // ⭐（マスター）とみなす箱
 const COLOR_CLASS_PREFIX = "cm-lv"; // ぬりえの段階クラスの接頭辞（cm-lv0〜cm-lv7）
@@ -176,9 +181,9 @@ function getCard(id) {
 }
 
 // --- 出題キューの組み立て（mistake-weighted SRS） ------------
-/** 新出・苦手の並びの優先層。⑤は県庁所在地の漢字が県名と違う県を先に出す（他は全て同じ層） */
+/** 新出・苦手の並びの優先層。⑤⑥は県庁所在地の漢字が県名と違う県を先に出す（他は全て同じ層） */
 function stepTier(step, p) {
-  return step === CAPITAL_STEP ? window.DrillProgress.capitalTier(p) : 0;
+  return CAPITAL_STEPS.includes(step) ? window.DrillProgress.capitalTier(p) : 0;
 }
 
 /**
@@ -858,7 +863,7 @@ function showStepQuestion() {
     `${quizState.index + 1} / ${quizState.ids.length}`;
   document.getElementById("quiz-choice-feedback").classList.add("hidden");
 
-  const isWrite = quizState.step === WRITE_STEP;
+  const isWrite = WRITE_STEPS.includes(quizState.step);
   document.getElementById("quiz-choice-area").classList.toggle("hidden", isWrite);
   document.getElementById("quiz-write-area").classList.toggle("hidden", !isWrite);
 
@@ -874,13 +879,40 @@ function showStepQuestion() {
     showCapitalQuestion(p);
   } else if (quizState.step === COMBINED_STEP) {
     showCombinedQuestion(p, quizState.index);
-  } else if (quizState.step === WRITE_STEP) {
-    document.getElementById("write-reading").textContent = p.reading;
-    document.getElementById("reveal-answer").textContent = p.name;
-    renderMapHint("write-map-hint", p);
-    document.getElementById("reveal-area").classList.add("hidden");
-    document.getElementById("btn-reveal").classList.remove("hidden");
+  } else if (WRITE_STEPS.includes(quizState.step)) {
+    showWriteQuestion(p, quizState.step);
   }
+}
+
+/**
+ * ④⑥の「かく」の問題を表示する。④は県名、⑥は県庁所在地が答え。
+ * 指示文・答え・添え書きはステップごとに毎回書き直すので、⑥から④へ戻っても残らない。
+ */
+function showWriteQuestion(p, step) {
+  const prog = window.DrillProgress;
+  const answerEl = document.getElementById("reveal-answer");
+  const noteEl = document.getElementById("reveal-note");
+  document.getElementById("write-reading").textContent = p.reading;
+  if (step === CAPITAL_WRITE_STEP) {
+    const kanaOnly = prog.capitalIsKanaOnly(p);
+    document.getElementById("write-instruction").textContent = kanaOnly
+      ? WRITE_INSTRUCTION_CAPITAL_KANA
+      : WRITE_INSTRUCTION_CAPITAL;
+    // さいたま市は、よみと同じ字になるのでふりがなを付けない
+    if (kanaOnly) answerEl.textContent = prog.capitalDisplay(p);
+    else answerEl.innerHTML = capitalRubyHtml(p);
+    const showNote = prog.capitalSharesKanji(p);
+    noteEl.textContent = showNote ? `${p.name}と おなじ 字` : "";
+    noteEl.classList.toggle("hidden", !showNote);
+  } else {
+    document.getElementById("write-instruction").textContent = WRITE_INSTRUCTION_PREF;
+    answerEl.textContent = p.name;
+    noteEl.textContent = "";
+    noteEl.classList.add("hidden");
+  }
+  renderMapHint("write-map-hint", p);
+  document.getElementById("reveal-area").classList.add("hidden");
+  document.getElementById("btn-reveal").classList.remove("hidden");
 }
 
 /** ①の問題を表示する（県名→よみの3択） */
@@ -1007,20 +1039,21 @@ function nextStepQuestion() {
   }
 }
 
-/** Step4: 答えを表示（自己採点ボタンを出す） */
+/** Step4/6: 答えを表示（自己採点ボタンを出す） */
 function revealWriteAnswer() {
   document.getElementById("reveal-area").classList.remove("hidden");
   document.getElementById("btn-reveal").classList.add("hidden");
 }
 
-/** Step4: 自己採点（ok=できた / false=まちがえた） */
+/** Step4/6: 自己採点（ok=できた / false=まちがえた）。今やっているステップの番号で記録する */
 function gradeWrite(ok) {
   const prefId = quizState.ids[quizState.index];
-  const id = cardId(WRITE_STEP, prefId);
+  const step = quizState.step;
+  const id = cardId(step, prefId);
   recordAnswer(id, ok);
   quizState.results[prefId] = ok ? "o" : "x";
   quizState.index += 1;
-  store.sessions[WRITE_STEP] = {
+  store.sessions[step] = {
     date: todayStr(),
     ids: quizState.ids,
     index: quizState.index,

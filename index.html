@@ -120,7 +120,7 @@
     <!-- Step4: 書く（紙＋自己採点） -->
     <div id="quiz-write-area" class="hidden">
       <div class="question-area">
-        <p class="instruction">よみを 見て、県の名前を 紙に かんじで 書こう</p>
+        <p id="write-instruction" class="instruction">よみを 見て、県の名前を 紙に かんじで 書こう</p>
         <p id="write-reading" class="reading-cue"></p>
         <div id="write-map-hint" class="map-hint"></div>
       </div>
@@ -128,6 +128,7 @@
       <div id="reveal-area" class="reveal hidden">
         <div class="answer-box">
           <div id="reveal-answer" class="answer-kanji"></div>
+          <p id="reveal-note" class="answer-note hidden"></p>
         </div>
         <p class="self-check-label">じぶんの 字と くらべてね</p>
         <div class="grade-row">

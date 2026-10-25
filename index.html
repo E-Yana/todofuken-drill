@@ -46,6 +46,18 @@
       </div>
     </div>
 
+    <div class="panel map-panel">
+      <h2>🗾 にっぽん ぬりえ</h2>
+      <div id="home-map" class="color-map" aria-label="日本地図のぬりえ"></div>
+      <ul class="cm-legend">
+        <li><span class="cm-sw cm-lv0"></span>まだ</li>
+        <li><span class="cm-sw cm-lv1"></span>まなんだ</li>
+        <li><span class="cm-sw cm-lv2"></span><span class="cm-sw cm-lv3"></span><span class="cm-sw cm-lv4"></span><span class="cm-sw cm-lv5"></span>⭐が ふえると こくなる</li>
+        <li><span class="cm-sw cm-lv6"></span>5つとも ⭐ で きんいろ</li>
+      </ul>
+      <p id="home-map-gold" class="map-gold"></p>
+    </div>
+
     <p id="home-step-msg" class="step-done-msg hidden"></p>
     <div class="step-list">
       <button id="btn-step-1" class="big-btn primary step-btn" data-step="1">
@@ -151,6 +163,10 @@
       <p id="result-msg" class="result-msg"></p>
       <p id="result-streak" class="result-streak"></p>
       <p id="result-achievement" class="achievement-msg hidden"></p>
+    </div>
+    <div id="result-map-box" class="panel map-panel hidden">
+      <div id="result-map" class="color-map small-map"></div>
+      <p id="result-recolor" class="map-gold"></p>
     </div>
     <div class="panel">
       <div id="result-weak"></div>

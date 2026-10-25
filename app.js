@@ -45,7 +45,12 @@ const MSG_DRIVE_FAILED = "ドライブに ほぞんできませんでした。�
 const RESTORE_KEY_PREFIX = "todofukenDrill_v1_restore_"; // 復元前の退避キー（+日付）
 const WEAK_TOP_N = 10; // バックアップ要約に載せる苦手の件数
 const ALL_STEPS = [READING_STEP, MAP_STEP, REGION_STEP, WRITE_STEP, CAPITAL_STEP]; // 全ステップ
+const COMBINED_STEP = 6; // そうごう（①〜⑤の混ぜ合わせ）ステップの番号
 const CORE_STEPS = [READING_STEP, MAP_STEP, REGION_STEP, WRITE_STEP]; // 「かんぺき」の対象（①〜④）
+const COLOR_STEPS = [...CORE_STEPS, CAPITAL_STEP]; // ぬりえと⑥の鍵の対象（①〜⑤）
+const STAR_MIN_BOX = 4; // ⭐（マスター）とみなす箱
+const COLOR_CLASS_PREFIX = "cm-lv"; // ぬりえの段階クラスの接頭辞（cm-lv0〜cm-lv6）
+const GLOW_CLASS = "cm-glow"; // 色がこくなった県を光らせるクラス
 const MSG_BACKUP_SHARED = "ほぞんの がめんを ひらきました。「ファイルに ほぞん」→「ドライブ」";
 const MSG_BACKUP_DOWNLOADED = "ファイルを ダウンロードしました";
 const MSG_BACKUP_FAILED = "ほぞんできませんでした";
@@ -218,6 +223,31 @@ function masteredForStep(step) {
     return c && c.box >= 4;
   }).length;
 }
+/** 県のそのステップの履歴（無ければ空配列） */
+function historyOf(step, prefId) {
+  const c = store.progress[cardId(step, prefId)];
+  return c ? c.history : [];
+}
+/** 指定ステップで、最高段階が箱4以上（⭐）の県数。beforeDate を渡すとその日より前の履歴だけで数える */
+function bestMasteredForStep(step, beforeDate) {
+  return window.PREFECTURES.filter((p) =>
+    window.DrillProgress.isStar(historyOf(step, p.id), beforeDate)
+  ).length;
+}
+/** ①〜④とも最高段階が箱4以上の県数（ホームの「かんぺき」。下がらない） */
+function bestTotalMastered() {
+  return window.PREFECTURES.filter((p) =>
+    CORE_STEPS.every((step) => window.DrillProgress.isStar(historyOf(step, p.id)))
+  ).length;
+}
+/** 県のぬりえの段階（0〜6）。beforeDate を渡すとその日より前の履歴だけで決める */
+function prefColorLevel(prefId, beforeDate) {
+  return window.DrillProgress.colorLevel(
+    COLOR_STEPS.map((step) => historyOf(step, prefId)),
+    [historyOf(COMBINED_STEP, prefId)],
+    beforeDate
+  );
+}
 /** 指定ステップで一度でも学習した県数（履歴あり）。正解しても減らないので初日から動く指標 */
 function touchedForStep(step) {
   return window.PREFECTURES.filter((p) => {
@@ -313,7 +343,7 @@ function renderHome() {
   setHomeStepMsg("");
   const total = window.PREFECTURES.length;
   document.getElementById("home-streak").textContent = store.meta.streak || 0;
-  document.getElementById("home-mastered").textContent = totalMastered();
+  document.getElementById("home-mastered").textContent = bestTotalMastered();
   document.getElementById("home-total").textContent = total;
   document.getElementById("home-touched").textContent = touchedAny();
   document.getElementById("home-touched-total").textContent = total;
@@ -323,7 +353,7 @@ function renderHome() {
   ALL_STEPS.forEach((step) => {
     const el = document.getElementById("progress-" + step);
     if (!el) return;
-    const mastered = masteredForStep(step);
+    const mastered = bestMasteredForStep(step);
     const star = mastered > 0 ? `⭐${mastered} ` : "";
     const count = `${star}${touchedForStep(step)}/${total}`;
     // 今日の分が終わったステップは、押しても問題が出ないことがボタンで分かるようにする
@@ -337,6 +367,8 @@ function renderHome() {
       el.textContent = count;
     }
   });
+
+  renderHomeMap();
 
   const weak = weakList(5);
   const weakBox = document.getElementById("home-weak");
@@ -409,12 +441,48 @@ function updateAwayNote(today) {
   }
 }
 
-/** 達成メッセージ（新しくマスターした数）を結果画面に表示する。0以下なら非表示にする */
+/** 日本地図ぬりえを描く。各県に段階のクラスを付け、glowIds の県は光らせる */
+function drawColorMap(containerId, levelOf, glowIds) {
+  const box = document.getElementById(containerId);
+  box.innerHTML = "";
+  const svg = cloneMapSvg();
+  box.appendChild(svg);
+  window.PREFECTURES.forEach((p) => {
+    highlightPrefecture(svg, p.id, COLOR_CLASS_PREFIX + levelOf(p.id));
+    if (glowIds && glowIds.includes(p.id)) highlightPrefecture(svg, p.id, GLOW_CLASS);
+  });
+}
+
+/** ホームのぬりえ（今の段階）と、きんいろの県数を描く */
+function renderHomeMap() {
+  drawColorMap("home-map", (id) => prefColorLevel(id), []);
+  const gold = window.PREFECTURES.filter(
+    (p) => prefColorLevel(p.id) === window.DrillProgress.LEVEL_GOLD
+  ).length;
+  document.getElementById("home-map-gold").textContent =
+    `🗾 きんいろ ${gold}/${window.PREFECTURES.length}県`;
+}
+
+/** 結果画面のぬりえ。今日の学習で段階が上がった県を光らせ、文を添える（0県なら出さない） */
+function renderResultMap() {
+  const box = document.getElementById("result-map-box");
+  const today = todayStr();
+  const risen = window.PREFECTURES.filter((p) => prefColorLevel(p.id, today) < prefColorLevel(p.id)).map(
+    (p) => p.id
+  );
+  box.classList.toggle("hidden", risen.length === 0);
+  if (risen.length === 0) return;
+  drawColorMap("result-map", (id) => prefColorLevel(id), risen);
+  document.getElementById("result-recolor").textContent =
+    `🎨 きょう ${risen.length}県の 色が こくなったよ！`;
+}
+
+/** 達成メッセージ（きょう新しくマスターした数）を結果画面に表示する。0以下なら非表示にする */
 function renderAchievement(newlyMastered, unit) {
   const el = document.getElementById("result-achievement");
   if (!el) return;
   if (newlyMastered > 0) {
-    el.textContent = `🌟 新しく ${newlyMastered}${unit} マスターしたよ！`;
+    el.textContent = `🌟 きょう ${newlyMastered}${unit} マスターしたよ！`;
     el.classList.remove("hidden");
   } else {
     el.classList.add("hidden");
@@ -1014,9 +1082,11 @@ function finishStepSession(ids, results, step, masteredBefore) {
   document.getElementById("result-msg").textContent = msg;
   document.getElementById("result-streak").textContent = `🔥 連続 ${store.meta.streak} 日`;
 
-  // 達成メッセージ（そのStepで新しくマスターした県の数だけを前向きに伝える。正答率は見せない）
-  const masteredAfter = masteredForStep(step);
-  renderAchievement(masteredAfter - (masteredBefore ?? masteredAfter), "けん");
+  // 達成メッセージ（そのStepできょう新しくマスターした県の数だけを前向きに伝える。正答率は見せない）
+  // 保存済みの masteredBefore には頼らず、今日より前の履歴だけで数える（版上げをまたいだ再開でも数がずれない）
+  const histories = window.PREFECTURES.map((p) => historyOf(step, p.id));
+  renderAchievement(window.DrillProgress.newlyMasteredCount(histories, today), "けん");
+  renderResultMap();
 
   const wrong = ids
     .filter((id) => results[id] === "x")
@@ -1037,11 +1107,12 @@ function finishStepSession(ids, results, step, masteredBefore) {
 }
 
 // --- バックアップ兼きろく（保存 / 復元） ---------------------
-/** ステップ別のできた県数（箱4以上）と、まなんだ県数 */
+/** ステップ別のできた県数（今の箱が4以上・最高段階が4以上）と、まなんだ県数 */
 function stepSummary() {
   return ALL_STEPS.map((step) => ({
     step,
     mastered: masteredForStep(step),
+    bestMastered: bestMasteredForStep(step),
     touched: touchedForStep(step),
     total: window.PREFECTURES.length,
   }));

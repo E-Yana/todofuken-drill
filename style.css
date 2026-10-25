@@ -391,3 +391,46 @@ input[type="text"] {
 /* ふりがな付きの選択肢（⑤けんちょうしょざいち） */
 .choice-btn ruby { ruby-position: over; }
 .choice-btn rt { font-size: 0.55em; font-weight: 600; letter-spacing: 0.05em; }
+
+/* ============ 日本地図ぬりえ（ホーム・結果画面） ============ */
+/* 段階色は .color-map 配下に限定する（.pref-target 等の !important と衝突させない） */
+.color-map { max-width: 420px; margin: 4px auto 8px; }
+.color-map.small-map { max-width: 260px; }
+.color-map svg { width: 100%; height: auto; display: block; }
+.color-map [data-code] { stroke: #ffffff; stroke-width: 1; fill: #d9dde3; }
+.color-map [data-code].cm-lv0 { fill: #d9dde3; }
+.color-map [data-code].cm-lv1 { fill: #cfe8f7; }
+.color-map [data-code].cm-lv2 { fill: #9fd0ee; }
+.color-map [data-code].cm-lv3 { fill: #6bb3e0; }
+.color-map [data-code].cm-lv4 { fill: #3a8fcb; }
+.color-map [data-code].cm-lv5 { fill: #1a5f9e; }
+.color-map [data-code].cm-lv6 { fill: #f5b800; }
+.color-map .boundary-line { pointer-events: none; }
+/* 色がこくなった県をゆっくり点滅させる */
+.color-map [data-code].cm-glow { animation: cm-blink 1.4s ease-in-out infinite; }
+@keyframes cm-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+.cm-legend {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  justify-content: center;
+  font-size: 13px;
+  color: var(--muted);
+}
+.cm-legend li { display: flex; align-items: center; gap: 3px; }
+.cm-sw { display: inline-block; width: 14px; height: 14px; border-radius: 3px; border: 1px solid #fff; box-shadow: 0 0 0 1px #c9d2de; }
+.cm-sw.cm-lv0 { background: #d9dde3; }
+.cm-sw.cm-lv1 { background: #cfe8f7; }
+.cm-sw.cm-lv2 { background: #9fd0ee; }
+.cm-sw.cm-lv3 { background: #6bb3e0; }
+.cm-sw.cm-lv4 { background: #3a8fcb; }
+.cm-sw.cm-lv5 { background: #1a5f9e; }
+.cm-sw.cm-lv6 { background: #f5b800; }
+.map-panel { text-align: center; }
+.map-gold { margin: 8px 0 0; font-size: 18px; font-weight: 800; color: #8a6d00; }

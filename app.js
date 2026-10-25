@@ -1,6 +1,6 @@
 // ============================================================
 // とどうふけんドリル アプリ本体
-//   - Step1 よみ / Step2 ばしょ / Step3 ちほう / Step4 かく の4ステップ
+//   - Step1 よみ / Step2 ばしょ / Step3 ちほう / Step4 かく / Step5 けんちょうしょざいち / Step6 けんちょうを かく / Step7 そうごう
 //     （いきなり地方だと難しいので、読み→場所で県に慣れてから地方を学ぶ順）
 //   - 間隔反復（Leitner 5箱）でステップごとに「間違えた県」を重点出題
 //   - 状態は localStorage に保存（サーバー不要）
@@ -24,16 +24,26 @@ const MAP_STEP = 2; // ばしょ（地図）ステップの番号
 const REGION_STEP = 3; // ちほう（地方3択）ステップの番号
 const WRITE_STEP = 4; // かく（書く・自己採点）ステップの番号
 const CAPITAL_STEP = 5; // けんちょうしょざいち（県→県庁所在地の3択）ステップの番号
-const COMBINED_STEP = 6; // そうごう（①〜⑤の混ぜ合わせ。鍵がそろうと解放）ステップの番号
+const CAPITAL_WRITE_STEP = 6; // けんちょうを かく（県のよみ→県庁所在地を紙に書く・自己採点）ステップの番号
+const COMBINED_STEP = 7; // そうごう（①〜⑥の混ぜ合わせ。鍵がそろうと解放）ステップの番号
 const STEP_LABELS = {
   [READING_STEP]: "よみ",
   [MAP_STEP]: "ばしょ",
   [REGION_STEP]: "ちほう",
   [WRITE_STEP]: "かく",
   [CAPITAL_STEP]: "けんちょう",
+  [CAPITAL_WRITE_STEP]: "けんちょうを かく",
   [COMBINED_STEP]: "そうごう",
 }; // お知らせ文言用のステップ名
-const STEP_MARKS = { 1: "①", 2: "②", 3: "③", 4: "④", 5: "⑤", 6: "⑥" }; // 丸数字（ホームの鍵の案内用）
+const STEP_MARKS = {
+  [READING_STEP]: "①",
+  [MAP_STEP]: "②",
+  [REGION_STEP]: "③",
+  [WRITE_STEP]: "④",
+  [CAPITAL_STEP]: "⑤",
+  [CAPITAL_WRITE_STEP]: "⑥",
+  [COMBINED_STEP]: "⑦",
+}; // 丸数字（ホームの鍵の案内用）
 const KEY_ICON = "🔑"; // 取れた鍵
 const KEY_EMPTY_ICON = "⬜"; // まだの鍵
 const MAX_SNAP_UNITS = 60; // 地図タップの吸着上限（viewBoxユニット）。これより陸から遠いタップは無反応にする
@@ -49,11 +59,19 @@ const MSG_DRIVE_OK = "ドライブに ほぞんしました";
 const MSG_DRIVE_FAILED = "ドライブに ほぞんできませんでした。もう一度 おすと ファイルで ほぞん";
 const RESTORE_KEY_PREFIX = "todofukenDrill_v1_restore_"; // 復元前の退避キー（+日付）
 const WEAK_TOP_N = 10; // バックアップ要約に載せる苦手の件数
-const ALL_STEPS = [READING_STEP, MAP_STEP, REGION_STEP, WRITE_STEP, CAPITAL_STEP, COMBINED_STEP]; // 全ステップ
+const ALL_STEPS = [
+  READING_STEP,
+  MAP_STEP,
+  REGION_STEP,
+  WRITE_STEP,
+  CAPITAL_STEP,
+  CAPITAL_WRITE_STEP,
+  COMBINED_STEP,
+]; // 全ステップ
 const CORE_STEPS = [READING_STEP, MAP_STEP, REGION_STEP, WRITE_STEP]; // 「かんぺき」の対象（①〜④）
-const COLOR_STEPS = [...CORE_STEPS, CAPITAL_STEP]; // ぬりえと⑥の鍵の対象（①〜⑤）
+const COLOR_STEPS = [...CORE_STEPS, CAPITAL_STEP, CAPITAL_WRITE_STEP]; // ぬりえと⑦の鍵の対象（①〜⑥）
 const STAR_MIN_BOX = 4; // ⭐（マスター）とみなす箱
-const COLOR_CLASS_PREFIX = "cm-lv"; // ぬりえの段階クラスの接頭辞（cm-lv0〜cm-lv6）
+const COLOR_CLASS_PREFIX = "cm-lv"; // ぬりえの段階クラスの接頭辞（cm-lv0〜cm-lv7）
 const GLOW_CLASS = "cm-glow"; // 色がこくなった県を光らせるクラス
 const MSG_BACKUP_SHARED = "ほぞんの がめんを ひらきました。「ファイルに ほぞん」→「ドライブ」";
 const MSG_BACKUP_DOWNLOADED = "ファイルを ダウンロードしました";
@@ -244,7 +262,7 @@ function bestTotalMastered() {
     CORE_STEPS.every((step) => window.DrillProgress.isStar(historyOf(step, p.id)))
   ).length;
 }
-/** 県のぬりえの段階（0〜6）。beforeDate を渡すとその日より前の履歴だけで決める */
+/** 県のぬりえの段階（0〜7）。beforeDate を渡すとその日より前の履歴だけで決める */
 function prefColorLevel(prefId, beforeDate) {
   return window.DrillProgress.colorLevel(
     COLOR_STEPS.map((step) => historyOf(step, prefId)),
@@ -252,7 +270,7 @@ function prefColorLevel(prefId, beforeDate) {
     beforeDate
   );
 }
-/** ⑥の鍵の状態。①〜⑤のうち全県が⭐の単元が鍵になる（beforeDate でその日より前の状態も出せる） */
+/** ⑦の鍵の状態。①〜⑥のうち全県が⭐の単元が鍵になる（beforeDate でその日より前の状態も出せる） */
 function combinedKeyStatus(beforeDate) {
   const counts = {};
   COLOR_STEPS.forEach((step) => {
@@ -260,7 +278,7 @@ function combinedKeyStatus(beforeDate) {
   });
   return window.DrillProgress.keyStatus(counts, window.PREFECTURES.length);
 }
-/** ⑥が開いているか */
+/** ⑦が開いているか */
 function isCombinedUnlocked() {
   return combinedKeyStatus().unlocked;
 }
@@ -411,7 +429,7 @@ function renderHome() {
 }
 
 /**
- * ホームの⑥ボタンを解放状態に合わせて整える。閉じている時は鍵の進み具合を出して false を返す。
+ * ホームの⑦ボタンを解放状態に合わせて整える。閉じている時は鍵の進み具合を出して false を返す。
  * 開いている時は通常のボタンに戻して true を返す（以降は他のステップと同じ表示）。
  */
 function renderCombinedLock(progressEl) {
@@ -522,7 +540,7 @@ function renderResultMap() {
     `🎨 きょう ${risen.length}県の 色が こくなったよ！`;
 }
 
-/** 結果画面の鍵のお知らせ。今日より前と比べて、鍵が増えた時・⑥が開いた時だけ出す（①〜⑤の学習の後のみ） */
+/** 結果画面の鍵のお知らせ。今日より前と比べて、鍵が増えた時・⑦が開いた時だけ出す（①〜⑥の学習の後のみ） */
 function renderKeyMessage(step) {
   const el = document.getElementById("result-keys");
   if (!el) return;
@@ -802,7 +820,7 @@ let quizState = null; // { step, ids, index, results }
 
 /** セッションを開始（途中なら再開、完了済みなら作り直し） */
 function startStep(step) {
-  // ⑥は鍵がそろうまで始めない（ボタンの無効化に加えた二重の守り）
+  // ⑦は鍵がそろうまで始めない（ボタンの無効化に加えた二重の守り）
   if (step === COMBINED_STEP && !isCombinedUnlocked()) return;
   if (step === MAP_STEP) {
     startMapStep();
@@ -881,7 +899,7 @@ function showRegionQuestion(p) {
   renderChoices("quiz-choices", p.region, otherRegions(p.region, 2), (ok) => gradeChoice(ok));
 }
 
-/** ②の3択版を表示する（日本全体の地図で光る県の名前を選ぶ。地図タップと「かく」は⑥に混ぜない） */
+/** ②の3択版を表示する（日本全体の地図で光る県の名前を選ぶ。地図タップと「かく」は⑦に混ぜない） */
 function showMapNameQuestion(p) {
   document.getElementById("quiz-instruction").textContent = "地図で 光っている 県は どこ？";
   document.getElementById("quiz-prompt").textContent = "";
@@ -901,7 +919,7 @@ function showReverseCapitalQuestion(p) {
   renderChoices("quiz-choices", p.name, otherPrefNames(p, 2), (ok) => gradeChoice(ok));
 }
 
-/** ⑥の問題を表示する。種類は「何問目か＋県番号」で決まり、途中再開しても同じになる */
+/** ⑦の問題を表示する。種類は「何問目か＋県番号」で決まり、途中再開しても同じになる */
 function showCombinedQuestion(p, index) {
   const types = window.DrillProgress.COMBINED_TYPES;
   const type = window.DrillProgress.combinedType(index, p.id);

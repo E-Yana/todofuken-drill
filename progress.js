@@ -1,5 +1,5 @@
 /**
- * 最高到達段階・ぬりえの色・⑥の鍵・⑤の選択肢など、進み具合まわりの純関数（DOM・store・window に触れない）。
+ * 最高到達段階・ぬりえの色・⑦の鍵・⑤の選択肢など、進み具合まわりの純関数（DOM・store・window に触れない）。
  * ブラウザでは window.DrillProgress、node では module.exports に公開する。
  * 乱数は引数（rand）で受けるので、試験では固定の乱数を渡せる。
  */
@@ -12,13 +12,13 @@
   var STAR_MIN_BOX = 4; // ⭐（マスター）とみなす箱
   var RESULT_OK = "o"; // 履歴の正解
   var RESULT_NG = "x"; // 履歴の不正解
-  var COLOR_UNIT_COUNT = 5; // ぬりえと鍵の対象になる単元の数（①〜⑤）
-  var KEYS_REQUIRED = 3; // ⑥が開くのに必要な鍵（⭐が全県そろった単元）の数
+  var COLOR_UNIT_COUNT = 6; // ぬりえと鍵の対象になる単元の数（①〜⑥）
+  var KEYS_REQUIRED = 3; // ⑦が開くのに必要な鍵（⭐が全県そろった単元）の数
   var LEVEL_UNTOUCHED = 0; // 未学習
   var LEVEL_TOUCHED = 1; // まなんだ（どこかで出題済み）
-  var LEVEL_GOLD = LEVEL_TOUCHED + COLOR_UNIT_COUNT; // 5単元とも⭐＝金色
-  var COMBINED_TYPE_COUNT = 5; // ⑥の問題の種類の数
-  var COMBINED_TYPES = { READING: 0, MAP: 1, REGION: 2, CAPITAL: 3, REVERSE: 4 }; // ⑥の問題の種類
+  var LEVEL_GOLD = LEVEL_TOUCHED + COLOR_UNIT_COUNT; // 6単元とも⭐＝金色
+  var COMBINED_TYPE_COUNT = 5; // ⑦の問題の種類の数
+  var COMBINED_TYPES = { READING: 0, MAP: 1, REGION: 2, CAPITAL: 3, REVERSE: 4 }; // ⑦の問題の種類
   var CAPITAL_CHOICE_DISTRACTORS = 2; // ⑤の誤答の数（3択）
   var CITY_SUFFIX = "市"; // 県庁所在地の表示に付ける語
   var NO_CITY_SUFFIX_IDS = ["13"]; // 「市」を付けない県（東京都）
@@ -64,8 +64,8 @@
   }
 
   /**
-   * 県1つのぬりえの段階（0=未学習／1=まなんだ／2〜5=⭐の単元が1〜4つ／6=5単元とも⭐の金色）。
-   * colorHistories: ①〜⑤の履歴の配列、extraHistories: それ以外（⑥）の履歴の配列。
+   * 県1つのぬりえの段階（0=未学習／1=まなんだ／2〜6=⭐の単元が1〜5つ／7=6単元とも⭐の金色）。
+   * colorHistories: ①〜⑥の履歴の配列、extraHistories: それ以外（⑦）の履歴の配列。
    * beforeDate を渡すと、その日より前の履歴だけで決める。
    */
   function colorLevel(colorHistories, extraHistories, beforeDate) {
@@ -77,7 +77,7 @@
   }
 
   /**
-   * ⑥の鍵の状態。starCounts: 単元番号 -> ⭐の県数、total: 県の総数。
+   * ⑦の鍵の状態。starCounts: 単元番号 -> ⭐の県数、total: 県の総数。
    * 戻り値: {keys, remaining, unlocked, nearest}。nearest は鍵まであと少しの単元 {step, left}（無ければ null）
    */
   function keyStatus(starCounts, total) {
@@ -96,7 +96,7 @@
     };
   }
 
-  /** ⑥の問題の種類（出題の何問目か＋県番号 を種類数で割った余り。保存せず毎回同じ値になる） */
+  /** ⑦の問題の種類（出題の何問目か＋県番号 を種類数で割った余り。保存せず毎回同じ値になる） */
   function combinedType(index, prefId) {
     return (index + parseInt(prefId, ID_RADIX)) % COMBINED_TYPE_COUNT;
   }

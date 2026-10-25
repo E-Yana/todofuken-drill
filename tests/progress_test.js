@@ -61,30 +61,50 @@ test("skips_unknown_result", () => {
   assert.strictEqual(P.finalBox(h), 4);
 });
 
-test("color_level_gold_needs_5_units", () => {
+test("color_level_gold_needs_6_units", () => {
   const star = hist("ooo");
   const none = hist("x");
-  assert.strictEqual(P.colorLevel([[], [], [], [], []], []), 0);
-  assert.strictEqual(P.colorLevel([none, [], [], [], []], []), 1);
-  assert.strictEqual(P.colorLevel([star, none, [], [], []], []), 2);
-  assert.strictEqual(P.colorLevel([star, star, star, star, none], []), 5);
-  assert.strictEqual(P.colorLevel([star, star, star, star, star], []), P.LEVEL_GOLD);
-  // ⑥だけ出題済みでも「まなんだ」に数える
-  assert.strictEqual(P.colorLevel([[], [], [], [], []], [none]), 1);
+  const e6 = [[], [], [], [], [], []];
+  assert.strictEqual(P.colorLevel(e6, []), 0);
+  assert.strictEqual(P.colorLevel([none, [], [], [], [], []], []), 1);
+  assert.strictEqual(P.colorLevel([star, none, [], [], [], []], []), 2);
+  // 5単元が⭐でも金色にはならない
+  assert.notStrictEqual(P.colorLevel([star, star, star, star, star, none], []), P.LEVEL_GOLD);
+  assert.strictEqual(P.colorLevel([star, star, star, star, star, star], []), P.LEVEL_GOLD);
+  // ⑦だけ出題済みでも「まなんだ」に数える
+  assert.strictEqual(P.colorLevel(e6, [none]), 1);
   // 今日の分は before で除く
-  assert.strictEqual(P.colorLevel([hist("ooo", TODAY), [], [], [], []], [], TODAY), 0);
+  assert.strictEqual(P.colorLevel([hist("ooo", TODAY), [], [], [], [], []], [], TODAY), 0);
+});
+
+test("gold_is_level7_and_5_units_is_level6", () => {
+  const star = hist("ooo");
+  const none = hist("x");
+  assert.strictEqual(P.LEVEL_GOLD, 7);
+  assert.strictEqual(P.colorLevel([star, star, star, star, star, none], []), 6);
 });
 
 test("keys_open_at_3_units", () => {
   const total = 47;
-  const two = P.keyStatus({ 1: 47, 2: 47, 3: 40, 4: 10, 5: 0 }, total);
+  const two = P.keyStatus({ 1: 47, 2: 47, 3: 40, 4: 10, 5: 0, 6: 0 }, total);
   assert.strictEqual(two.keys, 2);
   assert.strictEqual(two.unlocked, false);
   assert.strictEqual(two.remaining, 1);
   assert.deepStrictEqual(two.nearest, { step: 3, left: 7 });
-  const three = P.keyStatus({ 1: 47, 2: 47, 3: 47, 4: 10, 5: 0 }, total);
+  // 6単元のうち3つで開く（⑥が3つ目でもよい）
+  const three = P.keyStatus({ 1: 47, 2: 47, 3: 10, 4: 10, 5: 0, 6: 47 }, total);
+  assert.strictEqual(three.keys, 3);
   assert.strictEqual(three.unlocked, true);
   assert.strictEqual(three.nearest, null);
+});
+
+test("keys_six_units_one_complete_is_one_key", () => {
+  const total = 47;
+  // ⑥だけ47県そろうと鍵は1本。残りが同点（0県）なら番号の小さい単元が一番近い
+  const one = P.keyStatus({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 47 }, total);
+  assert.strictEqual(one.keys, 1);
+  assert.strictEqual(one.remaining, 2);
+  assert.deepStrictEqual(one.nearest, { step: 1, left: 47 });
 });
 
 test("combined_type_deterministic", () => {

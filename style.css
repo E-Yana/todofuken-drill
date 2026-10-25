@@ -404,7 +404,8 @@ input[type="text"] {
 .color-map [data-code].cm-lv3 { fill: #6bb3e0; }
 .color-map [data-code].cm-lv4 { fill: #3a8fcb; }
 .color-map [data-code].cm-lv5 { fill: #1a5f9e; }
-.color-map [data-code].cm-lv6 { fill: #f5b800; }
+.color-map [data-code].cm-lv6 { fill: #0f3d70; }
+.color-map [data-code].cm-lv7 { fill: #f5b800; }
 .color-map .boundary-line { pointer-events: none; }
 /* 色がこくなった県をゆっくり点滅させる */
 .color-map [data-code].cm-glow { animation: cm-blink 1.4s ease-in-out infinite; }
@@ -431,11 +432,12 @@ input[type="text"] {
 .cm-sw.cm-lv3 { background: #6bb3e0; }
 .cm-sw.cm-lv4 { background: #3a8fcb; }
 .cm-sw.cm-lv5 { background: #1a5f9e; }
-.cm-sw.cm-lv6 { background: #f5b800; }
+.cm-sw.cm-lv6 { background: #0f3d70; }
+.cm-sw.cm-lv7 { background: #f5b800; }
 .map-panel { text-align: center; }
 .map-gold { margin: 8px 0 0; font-size: 18px; font-weight: 800; color: #8a6d00; }
 
-/* ⑥の鍵の案内（ロック中のボタンの下） */
+/* ⑦の鍵の案内（ロック中のボタンの下） */
 .combined-hint { margin: -6px 0 8px; text-align: center; font-size: 14px; font-weight: 700; color: var(--muted); }
 .step-btn.locked .step-progress { opacity: 1; }
 .big-btn.step-btn.locked:disabled { opacity: 1; }

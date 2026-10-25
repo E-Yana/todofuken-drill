@@ -39,7 +39,7 @@ const KEY_EMPTY_ICON = "⬜"; // まだの鍵
 const MAX_SNAP_UNITS = 60; // 地図タップの吸着上限（viewBoxユニット）。これより陸から遠いタップは無反応にする
 // アプリの表示用バージョン。中身を更新したら sw.js の CACHE と対で必ずインクリメントする
 // （ホーム画面に表示することで、iPad側で更新が反映されたか目視確認できるようにする）
-const APP_VERSION = "v14";
+const APP_VERSION = "v15";
 const BACKUP_APP_ID = "todofuken-drill"; // バックアップJSONの app 値
 // 受け口が ok を返した日、または共有/ダウンロードを実行した日。Drive に入った保証は受け口 ok の時のみ
 const LAST_BACKUP_KEY = "todofukenDrill_lastBackup";

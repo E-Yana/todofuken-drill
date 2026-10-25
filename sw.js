@@ -1,6 +1,6 @@
 // service worker: オフラインで使えるよう、アプリ一式をキャッシュする
 // 中身を更新したら CACHE バージョン名を上げること（古いキャッシュを破棄）
-const CACHE = "todofuken-drill-v14";
+const CACHE = "todofuken-drill-v15";
 const ASSETS = [
   "./",
   "./index.html",
@@ -8,6 +8,7 @@ const ASSETS = [
   "./app.js",
   "./backup.js",
   "./queue.js",
+  "./progress.js",
   "./regions_data.js",
   "./prefectures_data.js",
   "./manifest.webmanifest",

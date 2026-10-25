@@ -75,9 +75,10 @@
       <button id="btn-step-5" class="big-btn primary step-btn" data-step="5">
         <span>⑤ けんちょうしょざいち</span><span class="step-progress" id="progress-5"></span>
       </button>
-      <button class="big-btn step-btn locked" disabled>
-        <span>🔒 ⑥ そうごう</span><span class="step-progress">じゅんびちゅう</span>
+      <button id="btn-step-6" class="big-btn step-btn locked" data-step="6" disabled>
+        <span>🔒 ⑥ そうごう</span><span class="step-progress" id="progress-6"></span>
       </button>
+      <p id="combined-keys-hint" class="combined-hint hidden"></p>
     </div>
 
     <div class="panel">
@@ -163,6 +164,7 @@
       <p id="result-msg" class="result-msg"></p>
       <p id="result-streak" class="result-streak"></p>
       <p id="result-achievement" class="achievement-msg hidden"></p>
+      <p id="result-keys" class="achievement-msg hidden"></p>
     </div>
     <div id="result-map-box" class="panel map-panel hidden">
       <div id="result-map" class="color-map small-map"></div>

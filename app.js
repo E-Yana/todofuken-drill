@@ -24,13 +24,18 @@ const MAP_STEP = 2; // ばしょ（地図）ステップの番号
 const REGION_STEP = 3; // ちほう（地方3択）ステップの番号
 const WRITE_STEP = 4; // かく（書く・自己採点）ステップの番号
 const CAPITAL_STEP = 5; // けんちょうしょざいち（県→県庁所在地の3択）ステップの番号
+const COMBINED_STEP = 6; // そうごう（①〜⑤の混ぜ合わせ。鍵がそろうと解放）ステップの番号
 const STEP_LABELS = {
   [READING_STEP]: "よみ",
   [MAP_STEP]: "ばしょ",
   [REGION_STEP]: "ちほう",
   [WRITE_STEP]: "かく",
   [CAPITAL_STEP]: "けんちょう",
+  [COMBINED_STEP]: "そうごう",
 }; // お知らせ文言用のステップ名
+const STEP_MARKS = { 1: "①", 2: "②", 3: "③", 4: "④", 5: "⑤", 6: "⑥" }; // 丸数字（ホームの鍵の案内用）
+const KEY_ICON = "🔑"; // 取れた鍵
+const KEY_EMPTY_ICON = "⬜"; // まだの鍵
 const MAX_SNAP_UNITS = 60; // 地図タップの吸着上限（viewBoxユニット）。これより陸から遠いタップは無反応にする
 // アプリの表示用バージョン。中身を更新したら sw.js の CACHE と対で必ずインクリメントする
 // （ホーム画面に表示することで、iPad側で更新が反映されたか目視確認できるようにする）
@@ -44,8 +49,7 @@ const MSG_DRIVE_OK = "ドライブに ほぞんしました";
 const MSG_DRIVE_FAILED = "ドライブに ほぞんできませんでした。もう一度 おすと ファイルで ほぞん";
 const RESTORE_KEY_PREFIX = "todofukenDrill_v1_restore_"; // 復元前の退避キー（+日付）
 const WEAK_TOP_N = 10; // バックアップ要約に載せる苦手の件数
-const ALL_STEPS = [READING_STEP, MAP_STEP, REGION_STEP, WRITE_STEP, CAPITAL_STEP]; // 全ステップ
-const COMBINED_STEP = 6; // そうごう（①〜⑤の混ぜ合わせ）ステップの番号
+const ALL_STEPS = [READING_STEP, MAP_STEP, REGION_STEP, WRITE_STEP, CAPITAL_STEP, COMBINED_STEP]; // 全ステップ
 const CORE_STEPS = [READING_STEP, MAP_STEP, REGION_STEP, WRITE_STEP]; // 「かんぺき」の対象（①〜④）
 const COLOR_STEPS = [...CORE_STEPS, CAPITAL_STEP]; // ぬりえと⑥の鍵の対象（①〜⑤）
 const STAR_MIN_BOX = 4; // ⭐（マスター）とみなす箱
@@ -248,6 +252,18 @@ function prefColorLevel(prefId, beforeDate) {
     beforeDate
   );
 }
+/** ⑥の鍵の状態。①〜⑤のうち全県が⭐の単元が鍵になる（beforeDate でその日より前の状態も出せる） */
+function combinedKeyStatus(beforeDate) {
+  const counts = {};
+  COLOR_STEPS.forEach((step) => {
+    counts[step] = bestMasteredForStep(step, beforeDate);
+  });
+  return window.DrillProgress.keyStatus(counts, window.PREFECTURES.length);
+}
+/** ⑥が開いているか */
+function isCombinedUnlocked() {
+  return combinedKeyStatus().unlocked;
+}
 /** 指定ステップで一度でも学習した県数（履歴あり）。正解しても減らないので初日から動く指標 */
 function touchedForStep(step) {
   return window.PREFECTURES.filter((p) => {
@@ -353,6 +369,7 @@ function renderHome() {
   ALL_STEPS.forEach((step) => {
     const el = document.getElementById("progress-" + step);
     if (!el) return;
+    if (step === COMBINED_STEP && !renderCombinedLock(el)) return;
     const mastered = bestMasteredForStep(step);
     const star = mastered > 0 ? `⭐${mastered} ` : "";
     const count = `${star}${touchedForStep(step)}/${total}`;
@@ -391,6 +408,34 @@ function renderHome() {
   updateAwayNote(todayStr());
   document.getElementById("app-version").textContent = APP_VERSION;
   showScreen("home");
+}
+
+/**
+ * ホームの⑥ボタンを解放状態に合わせて整える。閉じている時は鍵の進み具合を出して false を返す。
+ * 開いている時は通常のボタンに戻して true を返す（以降は他のステップと同じ表示）。
+ */
+function renderCombinedLock(progressEl) {
+  const status = combinedKeyStatus();
+  const btn = document.getElementById("btn-step-" + COMBINED_STEP);
+  const hint = document.getElementById("combined-keys-hint");
+  btn.disabled = !status.unlocked;
+  btn.classList.toggle("locked", !status.unlocked);
+  btn.classList.toggle("primary", status.unlocked);
+  btn.firstElementChild.textContent = `${status.unlocked ? "" : "🔒 "}${STEP_MARKS[COMBINED_STEP]} そうごう`;
+  hint.classList.toggle("hidden", status.unlocked);
+  if (status.unlocked) {
+    hint.textContent = "";
+    return true;
+  }
+  btn.classList.remove("done");
+  const need = window.DrillProgress.KEYS_REQUIRED;
+  progressEl.textContent =
+    KEY_ICON.repeat(status.keys) + KEY_EMPTY_ICON.repeat(need - status.keys) + ` あと${status.remaining}つ`;
+  const n = status.nearest;
+  hint.textContent = n
+    ? `${STEP_MARKS[n.step]} ${STEP_LABELS[n.step]} あと${n.left}県で ${KEY_ICON}`
+    : "";
+  return false;
 }
 
 /** 最終保存日を返す。別キーを優先し、無ければ旧 store.meta.lastBackup を見る（既存端末で促しが突然出ないように） */
@@ -475,6 +520,24 @@ function renderResultMap() {
   drawColorMap("result-map", (id) => prefColorLevel(id), risen);
   document.getElementById("result-recolor").textContent =
     `🎨 きょう ${risen.length}県の 色が こくなったよ！`;
+}
+
+/** 結果画面の鍵のお知らせ。今日より前と比べて、鍵が増えた時・⑥が開いた時だけ出す（①〜⑤の学習の後のみ） */
+function renderKeyMessage(step) {
+  const el = document.getElementById("result-keys");
+  if (!el) return;
+  const before = combinedKeyStatus(todayStr());
+  const after = combinedKeyStatus();
+  let text = "";
+  if (COLOR_STEPS.includes(step)) {
+    if (after.unlocked && !before.unlocked) {
+      text = `🎉 ${STEP_MARKS[COMBINED_STEP]} そうごう が ひらいたよ！`;
+    } else if (after.keys > before.keys) {
+      text = `${KEY_ICON} ${STEP_MARKS[COMBINED_STEP]}の かぎを ゲット！（あと ${after.remaining} こ）`;
+    }
+  }
+  el.textContent = text;
+  el.classList.toggle("hidden", text === "");
 }
 
 /** 達成メッセージ（きょう新しくマスターした数）を結果画面に表示する。0以下なら非表示にする */
@@ -739,6 +802,8 @@ let quizState = null; // { step, ids, index, results }
 
 /** セッションを開始（途中なら再開、完了済みなら作り直し） */
 function startStep(step) {
+  // ⑥は鍵がそろうまで始めない（ボタンの無効化に加えた二重の守り）
+  if (step === COMBINED_STEP && !isCombinedUnlocked()) return;
   if (step === MAP_STEP) {
     startMapStep();
     return;
@@ -784,17 +849,13 @@ function showStepQuestion() {
   showScreen("quiz");
 
   if (quizState.step === READING_STEP) {
-    document.getElementById("quiz-instruction").textContent = "この 県の名前、なんて よむ？";
-    document.getElementById("quiz-prompt").textContent = p.name;
-    renderMapHint("quiz-map-hint", p);
-    renderChoices("quiz-choices", p.reading, otherReadings(p, 2), (ok) => gradeChoice(ok));
+    showReadingQuestion(p);
   } else if (quizState.step === REGION_STEP) {
-    document.getElementById("quiz-instruction").textContent = "この 県は どの ちほう？";
-    document.getElementById("quiz-prompt").textContent = p.name;
-    renderMapHint("quiz-map-hint", p);
-    renderChoices("quiz-choices", p.region, otherRegions(p.region, 2), (ok) => gradeChoice(ok));
+    showRegionQuestion(p);
   } else if (quizState.step === CAPITAL_STEP) {
     showCapitalQuestion(p);
+  } else if (quizState.step === COMBINED_STEP) {
+    showCombinedQuestion(p, quizState.index);
   } else if (quizState.step === WRITE_STEP) {
     document.getElementById("write-reading").textContent = p.reading;
     document.getElementById("reveal-answer").textContent = p.name;
@@ -802,6 +863,53 @@ function showStepQuestion() {
     document.getElementById("reveal-area").classList.add("hidden");
     document.getElementById("btn-reveal").classList.remove("hidden");
   }
+}
+
+/** ①の問題を表示する（県名→よみの3択） */
+function showReadingQuestion(p) {
+  document.getElementById("quiz-instruction").textContent = "この 県の名前、なんて よむ？";
+  document.getElementById("quiz-prompt").textContent = p.name;
+  renderMapHint("quiz-map-hint", p);
+  renderChoices("quiz-choices", p.reading, otherReadings(p, 2), (ok) => gradeChoice(ok));
+}
+
+/** ③の問題を表示する（県名→ちほうの3択） */
+function showRegionQuestion(p) {
+  document.getElementById("quiz-instruction").textContent = "この 県は どの ちほう？";
+  document.getElementById("quiz-prompt").textContent = p.name;
+  renderMapHint("quiz-map-hint", p);
+  renderChoices("quiz-choices", p.region, otherRegions(p.region, 2), (ok) => gradeChoice(ok));
+}
+
+/** ②の3択版を表示する（日本全体の地図で光る県の名前を選ぶ。地図タップと「かく」は⑥に混ぜない） */
+function showMapNameQuestion(p) {
+  document.getElementById("quiz-instruction").textContent = "地図で 光っている 県は どこ？";
+  document.getElementById("quiz-prompt").textContent = "";
+  const hint = document.getElementById("quiz-map-hint");
+  hint.innerHTML = "";
+  const svg = cloneMapSvg();
+  hint.appendChild(svg);
+  highlightPrefecture(svg, p.id, "pref-target");
+  renderChoices("quiz-choices", p.name, otherPrefNames(p, 2), (ok) => gradeChoice(ok));
+}
+
+/** 逆向きの問題を表示する（県庁所在地→県名の3択。答えが見えないよう地図は出さない） */
+function showReverseCapitalQuestion(p) {
+  document.getElementById("quiz-instruction").textContent = "この けんちょうしょざいちの 県は どれ？";
+  document.getElementById("quiz-prompt").innerHTML = capitalRubyHtml(p);
+  document.getElementById("quiz-map-hint").innerHTML = "";
+  renderChoices("quiz-choices", p.name, otherPrefNames(p, 2), (ok) => gradeChoice(ok));
+}
+
+/** ⑥の問題を表示する。種類は「何問目か＋県番号」で決まり、途中再開しても同じになる */
+function showCombinedQuestion(p, index) {
+  const types = window.DrillProgress.COMBINED_TYPES;
+  const type = window.DrillProgress.combinedType(index, p.id);
+  if (type === types.READING) showReadingQuestion(p);
+  else if (type === types.MAP) showMapNameQuestion(p);
+  else if (type === types.REGION) showRegionQuestion(p);
+  else if (type === types.CAPITAL) showCapitalQuestion(p);
+  else showReverseCapitalQuestion(p);
 }
 
 /** 県庁所在地をふりがな付きのHTMLにする（例: 盛岡にふりがなを付けて「市」を後ろに続ける） */
@@ -863,6 +971,9 @@ function gradeChoice(ok) {
  */
 function buildChoiceFeedback(step, ok, p) {
   const prefix = ok ? "せいかい！" : "おしい！";
+  if (step === COMBINED_STEP) {
+    return `${prefix}${p.name}（${p.reading}）は ${p.region}地方。けんちょうしょざいちは ${window.DrillProgress.capitalWithReading(p)}だよ`;
+  }
   if (step === CAPITAL_STEP) {
     return `${prefix}${p.name}の けんちょうしょざいちは ${window.DrillProgress.capitalWithReading(p)}だよ`;
   }
@@ -1087,6 +1198,7 @@ function finishStepSession(ids, results, step, masteredBefore) {
   const histories = window.PREFECTURES.map((p) => historyOf(step, p.id));
   renderAchievement(window.DrillProgress.newlyMasteredCount(histories, today), "けん");
   renderResultMap();
+  renderKeyMessage(step);
 
   const wrong = ids
     .filter((id) => results[id] === "x")

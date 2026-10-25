@@ -23,7 +23,14 @@ const READING_STEP = 1; // よみ（読み方3択）ステップの番号
 const MAP_STEP = 2; // ばしょ（地図）ステップの番号
 const REGION_STEP = 3; // ちほう（地方3択）ステップの番号
 const WRITE_STEP = 4; // かく（書く・自己採点）ステップの番号
-const STEP_LABELS = { 1: "よみ", 2: "ばしょ", 3: "ちほう", 4: "かく" }; // お知らせ文言用のステップ名
+const CAPITAL_STEP = 5; // けんちょうしょざいち（県→県庁所在地の3択）ステップの番号
+const STEP_LABELS = {
+  [READING_STEP]: "よみ",
+  [MAP_STEP]: "ばしょ",
+  [REGION_STEP]: "ちほう",
+  [WRITE_STEP]: "かく",
+  [CAPITAL_STEP]: "けんちょう",
+}; // お知らせ文言用のステップ名
 const MAX_SNAP_UNITS = 60; // 地図タップの吸着上限（viewBoxユニット）。これより陸から遠いタップは無反応にする
 // アプリの表示用バージョン。中身を更新したら sw.js の CACHE と対で必ずインクリメントする
 // （ホーム画面に表示することで、iPad側で更新が反映されたか目視確認できるようにする）
@@ -37,7 +44,8 @@ const MSG_DRIVE_OK = "ドライブに ほぞんしました";
 const MSG_DRIVE_FAILED = "ドライブに ほぞんできませんでした。もう一度 おすと ファイルで ほぞん";
 const RESTORE_KEY_PREFIX = "todofukenDrill_v1_restore_"; // 復元前の退避キー（+日付）
 const WEAK_TOP_N = 10; // バックアップ要約に載せる苦手の件数
-const ALL_STEPS = [READING_STEP, MAP_STEP, REGION_STEP, WRITE_STEP]; // 全ステップ
+const ALL_STEPS = [READING_STEP, MAP_STEP, REGION_STEP, WRITE_STEP, CAPITAL_STEP]; // 全ステップ
+const CORE_STEPS = [READING_STEP, MAP_STEP, REGION_STEP, WRITE_STEP]; // 「かんぺき」の対象（①〜④）
 const MSG_BACKUP_SHARED = "ほぞんの がめんを ひらきました。「ファイルに ほぞん」→「ドライブ」";
 const MSG_BACKUP_DOWNLOADED = "ファイルを ダウンロードしました";
 const MSG_BACKUP_FAILED = "ほぞんできませんでした";
@@ -141,6 +149,11 @@ function getCard(id) {
 }
 
 // --- 出題キューの組み立て（mistake-weighted SRS） ------------
+/** 新出・苦手の並びの優先層。⑤は県庁所在地の漢字が県名と違う県を先に出す（他は全て同じ層） */
+function stepTier(step, p) {
+  return step === CAPITAL_STEP ? window.DrillProgress.capitalTier(p) : 0;
+}
+
 /**
  * 指定ステップの今日出す県IDの配列を作る（配分は queue.js の composeDaily）。
  *   苦手＝期限が来た箱1〜3／定着＝期限が来た箱4以上／新出＝未出題（北→南の地方順）
@@ -166,7 +179,7 @@ function buildStepQueue(step) {
       box: c.box,
       dueDate: c.dueDate,
       wrongCount: c.wrongCount,
-      tier: 0,
+      tier: stepTier(step, p),
       idx,
       seen: c.history.length > 0,
     };
@@ -255,16 +268,16 @@ function showStepDone(step) {
 /** いずれかのステップで一度でも学習した県数 */
 function touchedAny() {
   return window.PREFECTURES.filter((p) =>
-    [READING_STEP, MAP_STEP, REGION_STEP, WRITE_STEP].some((step) => {
+    ALL_STEPS.some((step) => {
       const c = store.progress[cardId(step, p.id)];
       return c && c.history.length > 0;
     })
   ).length;
 }
-/** Step1〜4すべてマスター済みの県数（＝完全に覚えた県） */
+/** ①〜④すべてマスター済み（今の箱）の県数 */
 function totalMastered() {
   return window.PREFECTURES.filter((p) =>
-    [READING_STEP, MAP_STEP, REGION_STEP, WRITE_STEP].every((step) => {
+    CORE_STEPS.every((step) => {
       const c = store.progress[cardId(step, p.id)];
       return c && c.box >= 4;
     })
@@ -274,7 +287,7 @@ function totalMastered() {
 function weakList(limit = 5) {
   const totals = window.PREFECTURES.map((p) => {
     let wrong = 0;
-    [READING_STEP, MAP_STEP, REGION_STEP, WRITE_STEP].forEach((step) => {
+    ALL_STEPS.forEach((step) => {
       const c = store.progress[cardId(step, p.id)];
       if (c) wrong += c.wrongCount;
     });
@@ -307,7 +320,7 @@ function renderHome() {
 
   // Step別は「まなんだ県/47」を主に出す（マスターは箱4以上＝3回正解が必要で、
   // 学習し始めの時期は全部0になり実態と合わないため）。マスターは⭐で併記する
-  [READING_STEP, MAP_STEP, REGION_STEP, WRITE_STEP].forEach((step) => {
+  ALL_STEPS.forEach((step) => {
     const el = document.getElementById("progress-" + step);
     if (!el) return;
     const mastered = masteredForStep(step);
@@ -433,8 +446,12 @@ function otherPrefNames(correctPref, n) {
   return shuffleArray(pool).slice(0, n);
 }
 
-/** 3択ボタンを描画し、選んだら onSelect(choice, ok) を呼ぶ（共通の選択肢UI） */
-function renderChoices(containerId, correctText, distractorTexts, onSelect) {
+/**
+ * 3択ボタンを描画し、選んだら onSelect(ok) を呼ぶ（共通の選択肢UI）。
+ * labelHtml（任意）は選択肢の文字から表示用のHTMLを作る関数（ふりがな付き表示など）。
+ * 正解の見分けは表示文字でなく data-answer 属性で行う（ふりがなが入っても正解が光るように）。
+ */
+function renderChoices(containerId, correctText, distractorTexts, onSelect, labelHtml) {
   const choices = shuffleArray([correctText, ...distractorTexts]);
   const box = document.getElementById(containerId);
   box.innerHTML = "";
@@ -442,12 +459,14 @@ function renderChoices(containerId, correctText, distractorTexts, onSelect) {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "choice-btn";
-    btn.textContent = choice;
+    btn.dataset.answer = choice;
+    if (labelHtml) btn.innerHTML = labelHtml(choice);
+    else btn.textContent = choice;
     btn.addEventListener("click", () => {
       const ok = choice === correctText;
       box.querySelectorAll(".choice-btn").forEach((b) => {
         b.disabled = true;
-        if (b.textContent === correctText) b.classList.add("ok");
+        if (b.dataset.answer === correctText) b.classList.add("ok");
         else if (b === btn && !ok) b.classList.add("ng");
       });
       onSelect(ok);
@@ -706,6 +725,8 @@ function showStepQuestion() {
     document.getElementById("quiz-prompt").textContent = p.name;
     renderMapHint("quiz-map-hint", p);
     renderChoices("quiz-choices", p.region, otherRegions(p.region, 2), (ok) => gradeChoice(ok));
+  } else if (quizState.step === CAPITAL_STEP) {
+    showCapitalQuestion(p);
   } else if (quizState.step === WRITE_STEP) {
     document.getElementById("write-reading").textContent = p.reading;
     document.getElementById("reveal-answer").textContent = p.name;
@@ -715,7 +736,35 @@ function showStepQuestion() {
   }
 }
 
-/** Step1/3の3択採点（自動） */
+/** 県庁所在地をふりがな付きのHTMLにする（例: 盛岡にふりがなを付けて「市」を後ろに続ける） */
+function capitalRubyHtml(pref) {
+  const c = window.DrillProgress.capitalParts(pref);
+  return (
+    `<ruby>${escapeHtml(c.base)}<rt>${escapeHtml(c.reading)}</rt></ruby>` + escapeHtml(c.suffix)
+  );
+}
+
+/** ⑤の問題を表示する（県→県庁所在地の3択。選択肢にはふりがなを常に付ける） */
+function showCapitalQuestion(p) {
+  const prog = window.DrillProgress;
+  document.getElementById("quiz-instruction").textContent = "この 県の けんちょうしょざいちは？";
+  document.getElementById("quiz-prompt").textContent = p.name;
+  renderMapHint("quiz-map-hint", p);
+  const options = [p, ...prog.capitalDistractors(p, window.PREFECTURES, Math.random)];
+  const byText = {};
+  options.forEach((o) => {
+    byText[prog.capitalDisplay(o)] = o;
+  });
+  renderChoices(
+    "quiz-choices",
+    prog.capitalDisplay(p),
+    options.slice(1).map(prog.capitalDisplay),
+    (ok) => gradeChoice(ok),
+    (text) => capitalRubyHtml(byText[text])
+  );
+}
+
+/** Step1/3/5の3択採点（自動） */
 function gradeChoice(ok) {
   const prefId = quizState.ids[quizState.index];
   const p = prefById(prefId);
@@ -746,6 +795,9 @@ function gradeChoice(ok) {
  */
 function buildChoiceFeedback(step, ok, p) {
   const prefix = ok ? "せいかい！" : "おしい！";
+  if (step === CAPITAL_STEP) {
+    return `${prefix}${p.name}の けんちょうしょざいちは ${window.DrillProgress.capitalWithReading(p)}だよ`;
+  }
   if (step === REGION_STEP) return prefix + (ok ? "🎉" : "");
   return `${prefix}これは${p.region}地方の${p.name}だよ`;
 }

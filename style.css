@@ -387,3 +387,7 @@ input[type="text"] {
 .drive-input { display: block; width: 100%; margin: 4px 0 10px; padding: 8px; font-size: 16px; box-sizing: border-box; }
 .drive-buttons { display: flex; gap: 12px; }
 .small-btn { min-height: 44px; padding: 0 20px; font-size: 16px; border-radius: 10px; }
+
+/* ふりがな付きの選択肢（⑤けんちょうしょざいち） */
+.choice-btn ruby { ruby-position: over; }
+.choice-btn rt { font-size: 0.55em; font-weight: 600; letter-spacing: 0.05em; }

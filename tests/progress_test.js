@@ -184,6 +184,42 @@ test("newly_mastered_today", () => {
   assert.strictEqual(P.newlyMasteredCount(histories, TODAY), 1);
 });
 
+test("shown_streak_rules", () => {
+  assert.strictEqual(P.shownStreak(6, "2026-10-30", "2026-11-01"), 0); // 休み明け（一昨日）
+  assert.strictEqual(P.shownStreak(6, "2026-10-31", "2026-11-01"), 6); // 昨日なら継続（月またぎ）
+  assert.strictEqual(P.shownStreak(6, "2026-11-01", "2026-11-01"), 6); // 今日なら継続
+  assert.strictEqual(P.shownStreak(6, null, "2026-11-01"), 0); // 最終学習日なし
+  assert.strictEqual(P.shownStreak(undefined, "2026-11-01", "2026-11-01"), 0); // 保存値なし
+});
+
+test("recent_days_order_weekday_today", () => {
+  const dates = P.studyDates([hist("o", "2026-10-30"), hist("x", "2026-11-01")]);
+  const days = P.recentDays(dates, "2026-11-01", 7);
+  assert.strictEqual(days.length, 8); // 7日前〜今日
+  assert.strictEqual(days[0].date, "2026-10-25");
+  assert.strictEqual(days[7].date, "2026-11-01");
+  assert.strictEqual(days[7].weekday, "日"); // 2026-11-01 は日曜
+  assert.strictEqual(days[0].weekday, "日");
+  assert.deepStrictEqual(days.filter((d) => d.isToday).map((d) => d.date), ["2026-11-01"]);
+  assert.deepStrictEqual(days.filter((d) => d.studied).map((d) => d.date), ["2026-10-30", "2026-11-01"]);
+});
+
+test("recent_days_cross_month", () => {
+  const days = P.recentDays([], "2026-11-02", 3);
+  assert.deepStrictEqual(days.map((d) => d.date), ["2026-10-30", "2026-10-31", "2026-11-01", "2026-11-02"]);
+  assert.deepStrictEqual(days.map((d) => d.weekday), ["金", "土", "日", "月"]);
+  assert.ok(days.every((d) => d.studied === false));
+});
+
+test("step_rest_kind_done_and_rest", () => {
+  const today = "2026-11-01";
+  assert.strictEqual(P.stepRestKind({ date: today, index: 5, ids: [1, 2, 3, 4, 5] }, today), "done");
+  assert.strictEqual(P.stepRestKind({ date: "2026-10-31", index: 5, ids: [1, 2, 3, 4, 5] }, today), "rest");
+  assert.strictEqual(P.stepRestKind(null, today), "rest");
+  // 途中でやめたセッションは hasStepWorkToday が真になり、この関数は呼ばれない前提。単体では rest を返す
+  assert.strictEqual(P.stepRestKind({ date: today, index: 2, ids: [1, 2, 3, 4, 5] }, today), "rest");
+});
+
 if (failed > 0) {
   console.log(failed + " 件失敗");
   process.exit(1);

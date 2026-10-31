@@ -25,6 +25,7 @@
   var TIER_PRIORITY = 0; // 重点（県庁所在地の漢字が県名と違う県）
   var TIER_NORMAL = 1; // 通常
   var ID_RADIX = 10; // 県番号の基数
+  var WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"]; // Date.getDay() の順
   var HIRAGANA_ONLY = /^[\u3041-\u3096\u30fc]+$/; // ひらがなだけの文字列（「ー」を含む）
 
   /** 履歴の1件が正解/不正解のどちらかか（壊れた記録は飛ばすための判定） */
@@ -178,6 +179,70 @@
     }).length;
   }
 
+  /** 履歴（各カードの history 配列の配列）から、1問以上答えた日付（YYYY-MM-DD）の集合を返す */
+  function studyDates(histories) {
+    var dates = new Set();
+    (histories || []).forEach(function (history) {
+      (history || []).forEach(function (entry) {
+        if (isKnownResult(entry) && entry.date) dates.add(entry.date);
+      });
+    });
+    return dates;
+  }
+
+  /** YYYY-MM-DD をローカル時刻の Date にする（タイムゾーンずれを避けるため T00:00:00 を付ける） */
+  function parseLocalDate(dateStr) {
+    return new Date(dateStr + "T00:00:00");
+  }
+
+  /** Date を YYYY-MM-DD（ローカル時刻）にする */
+  function formatLocalDate(d) {
+    var pad = function (n) { return (n < 10 ? "0" : "") + n; };
+    return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+  }
+
+  /**
+   * today から n 日前〜今日までを古い順に並べる。
+   * dates: studyDates の集合（Set または配列）。戻り値: [{date, weekday, studied, isToday}]
+   */
+  function recentDays(dates, today, n) {
+    var set = dates instanceof Set ? dates : new Set(dates || []);
+    var base = parseLocalDate(today);
+    var list = [];
+    for (var i = n; i >= 0; i--) {
+      var d = new Date(base.getFullYear(), base.getMonth(), base.getDate() - i);
+      var str = formatLocalDate(d);
+      list.push({
+        date: str,
+        weekday: WEEKDAY_LABELS[d.getDay()],
+        studied: set.has(str),
+        isToday: i === 0,
+      });
+    }
+    return list;
+  }
+
+  /** ホームに出す連続日数。最後に学習した日が今日か昨日なら保存値、それ以外（休み明け・記録なし）は 0 */
+  function shownStreak(streak, lastStudyDate, today) {
+    if (!lastStudyDate) return 0;
+    return lastStudyDate === today || lastStudyDate === previousDay(today) ? streak || 0 : 0;
+  }
+
+  /** 前日の日付（YYYY-MM-DD） */
+  function previousDay(dateStr) {
+    var d = parseLocalDate(dateStr);
+    return formatLocalDate(new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1));
+  }
+
+  /**
+   * 今日出す問題が無いステップの表示種別。
+   * 今日のセッションを最後まで終えていれば "done"（できた）、それ以外は "rest"（おやすみ）。
+   */
+  function stepRestKind(session, today) {
+    if (session && session.date === today && session.index >= session.ids.length) return "done";
+    return "rest";
+  }
+
   var api = {
     bestBox: bestBox,
     finalBox: finalBox,
@@ -197,6 +262,10 @@
     capitalIsKanaOnly: capitalIsKanaOnly,
     capitalSharesKanji: capitalSharesKanji,
     newlyMasteredCount: newlyMasteredCount,
+    studyDates: studyDates,
+    recentDays: recentDays,
+    shownStreak: shownStreak,
+    stepRestKind: stepRestKind,
   };
 
   if (typeof module !== "undefined" && module.exports) {

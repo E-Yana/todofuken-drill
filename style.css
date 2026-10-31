@@ -61,6 +61,25 @@ html, body {
 .stat-num { font-size: 30px; font-weight: 800; color: var(--main); line-height: 1.1; }
 .stat-num .unit { font-size: 15px; font-weight: 600; margin-left: 2px; }
 .stat-label { font-size: 13px; color: var(--muted); margin-top: 4px; }
+/* れんぞく欄の直近7日（曜日の下に ●/○。今日は枠） */
+.week-dots { display: flex; justify-content: center; gap: 0; margin: 6px 2px 0; }
+.week-day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  padding: 1px 0;
+  border: 1.5px solid transparent;
+  border-radius: 6px;
+  font-size: 10px;
+  line-height: 1.3;
+  color: var(--muted);
+}
+.week-day.today { border-color: var(--main); color: var(--main); font-weight: 700; }
+.week-mark { font-size: 15px; line-height: 1.2; color: #b8c1cc; }
+/* やった日は れんぞくの🔥と同じ だいだい色 */
+.week-mark.studied { color: #f08c2e; }
 
 .done-note {
   background: #fff7e0;
@@ -118,9 +137,9 @@ html, body {
 }
 .step-progress { font-size: 14px; font-weight: 600; opacity: 0.85; }
 .step-btn.locked { background: #e3e8ef; color: var(--muted); }
-/* 今日の分が終わったステップ（押せるが「済んだ」と分かる緑） */
-.big-btn.primary.step-btn.done { background: var(--ok); box-shadow: 0 4px 0 #1f6b40; }
-.step-btn.done .step-progress { opacity: 1; }
+/* 今日出す問題が無いステップ（押せる灰色。⑦の鍵 .locked の薄い灰色・影なしとは別物） */
+.big-btn.primary.step-btn.rest { background: #9aa5b1; color: #fff; box-shadow: 0 4px 0 #6b7682; }
+.step-btn.rest .step-progress { opacity: 1; }
 /* 今日の分が終わったステップを押した時のお知らせ */
 .step-done-msg {
   margin: 12px 0 0;

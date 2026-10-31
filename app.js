@@ -14,6 +14,7 @@ const DEFAULT_DAILY = 10; // 1日の出題数
 const DEFAULT_NEW_PER_DAY = 5; // 1日に増やす新出県の目標数（苦手が少なければ超えて出る）
 const NEW_MIN = 2; // 各ステップで1日に最低これだけ新出を入れる（在庫がある時）
 const MASTERED_CAP = 2; // 定着済み（箱4以上）の復習の1日の目安上限
+const WEEK_DOT_DAYS = 6; // れんぞく欄の●○は、この日数前〜今日（＝直近7日）
 const BACKUP_REMIND_DAYS = 14; // 最終バックアップからこの日数が経ったら書き出しを促す
 const AWAY_REMIND_DAYS = 5; // 最終学習からこの日数以上空いたら「〇日ぶりだね」を表示（旅行等の数日の間は責めない）
 // Leitner の箱ごとの「次に出すまでの日数」（箱が上がるほど間隔が伸びる）
@@ -49,7 +50,7 @@ const KEY_EMPTY_ICON = "⬜"; // まだの鍵
 const MAX_SNAP_UNITS = 60; // 地図タップの吸着上限（viewBoxユニット）。これより陸から遠いタップは無反応にする
 // アプリの表示用バージョン。中身を更新したら sw.js の CACHE と対で必ずインクリメントする
 // （ホーム画面に表示することで、iPad側で更新が反映されたか目視確認できるようにする）
-const APP_VERSION = "v16";
+const APP_VERSION = "v17";
 const BACKUP_APP_ID = "todofuken-drill"; // バックアップJSONの app 値
 // 受け口が ok を返した日、または共有/ダウンロードを実行した日。Drive に入った保証は受け口 ok の時のみ
 const LAST_BACKUP_KEY = "todofukenDrill_lastBackup";
@@ -316,11 +317,14 @@ function formatMonthDay(dateStr) {
   const [, m, d] = dateStr.split("-");
   return `${parseInt(m, 10)}/${parseInt(d, 10)}`;
 }
-/** 今日の分が終わった時にホームへ出すお知らせ文 */
+/** 今日出す問題が無いステップを押した時にホームへ出すお知らせ文（できた／おやすみ） */
 function stepDoneMessage(step) {
   const next = nextDueForStep(step);
-  const nextText = next ? ` つぎは ${formatMonthDay(next)} だよ` : "";
-  return `🎉 きょうの ${STEP_LABELS[step]}は おわり！${nextText}`;
+  const nextText = next ? `つぎは ${formatMonthDay(next)} だよ` : "";
+  if (DrillProgress.stepRestKind(store.sessions[step], todayStr()) === "done") {
+    return `🎉 きょうの ${STEP_LABELS[step]}は できた！${nextText ? " " + nextText : ""}`;
+  }
+  return `💤 きょうの ${STEP_LABELS[step]}は おやすみ。${nextText}`;
 }
 /** ホームのお知らせを書き換える（空文字で消す） */
 function setHomeStepMsg(text) {
@@ -378,10 +382,27 @@ function showScreen(name) {
 }
 
 // --- ホーム画面 ----------------------------------------------
+/** ホームと要約に出す連続日数（休み明けは 0。保存値 meta.streak は変えない） */
+function shownStreakToday() {
+  return DrillProgress.shownStreak(store.meta.streak, store.meta.lastStudyDate, todayStr());
+}
+/** れんぞく欄の直近7日（曜日の下に ●=答えた日／○=答えていない日。今日は枠つき） */
+function renderHomeWeek() {
+  const histories = Object.values(store.progress).map((c) => c.history);
+  const days = DrillProgress.recentDays(DrillProgress.studyDates(histories), todayStr(), WEEK_DOT_DAYS);
+  document.getElementById("home-week").innerHTML = days
+    .map(
+      (d) =>
+        `<span class="week-day${d.isToday ? " today" : ""}">` +
+        `<span class="week-wd">${d.weekday}</span><span class="week-mark${d.studied ? " studied" : ""}">${d.studied ? "●" : "○"}</span></span>`
+    )
+    .join("");
+}
 function renderHome() {
   setHomeStepMsg("");
   const total = window.PREFECTURES.length;
-  document.getElementById("home-streak").textContent = store.meta.streak || 0;
+  document.getElementById("home-streak").textContent = shownStreakToday();
+  renderHomeWeek();
   document.getElementById("home-mastered").textContent = bestTotalMastered();
   document.getElementById("home-total").textContent = total;
   document.getElementById("home-touched").textContent = touchedAny();
@@ -396,13 +417,17 @@ function renderHome() {
     const mastered = bestMasteredForStep(step);
     const star = mastered > 0 ? `⭐${mastered} ` : "";
     const count = `${star}${touchedForStep(step)}/${total}`;
-    // 今日の分が終わったステップは、押しても問題が出ないことがボタンで分かるようにする
-    const done = !hasStepWorkToday(step);
-    document.getElementById("btn-step-" + step).classList.toggle("done", done);
-    if (done) {
+    // 今日出す問題が無いステップは、押しても問題が出ないことがボタンで分かるようにする（灰色）
+    const rest = !hasStepWorkToday(step);
+    document.getElementById("btn-step-" + step).classList.toggle("rest", rest);
+    if (rest) {
       const next = nextDueForStep(step);
       const nextText = next ? `・つぎ ${formatMonthDay(next)}` : "";
-      el.textContent = `✅ きょうは おわり${nextText}｜${count}`;
+      const kind = DrillProgress.stepRestKind(store.sessions[step], todayStr());
+      el.textContent =
+        kind === "done"
+          ? `✅ きょうの ぶん できた${nextText}｜${count}`
+          : `💤 きょうは おやすみ${nextText}｜${count}`;
     } else {
       el.textContent = count;
     }
@@ -1303,7 +1328,7 @@ function buildBackupSummary() {
     totalCount: window.PREFECTURES.length,
     steps: stepSummary(),
     weak: weakCards(WEAK_TOP_N),
-    streak: store.meta.streak || 0,
+    streak: shownStreakToday(),
     lastStudyDate: store.meta.lastStudyDate || null,
   };
 }

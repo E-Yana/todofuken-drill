@@ -50,7 +50,7 @@ const KEY_EMPTY_ICON = "⬜"; // まだの鍵
 const MAX_SNAP_UNITS = 60; // 地図タップの吸着上限（viewBoxユニット）。これより陸から遠いタップは無反応にする
 // アプリの表示用バージョン。中身を更新したら sw.js の CACHE と対で必ずインクリメントする
 // （ホーム画面に表示することで、iPad側で更新が反映されたか目視確認できるようにする）
-const APP_VERSION = "v17";
+const APP_VERSION = "v18";
 const BACKUP_APP_ID = "todofuken-drill"; // バックアップJSONの app 値
 // 受け口が ok を返した日、または共有/ダウンロードを実行した日。Drive に入った保証は受け口 ok の時のみ
 const LAST_BACKUP_KEY = "todofukenDrill_lastBackup";
@@ -1016,10 +1016,37 @@ function showCapitalQuestion(p) {
 }
 
 /** Step1/3/5の3択採点（自動） */
+// ---- 効果音（sound.js） ----
+// 効果音を鳴らす。sound.js が読めない時も学習は止めない
+function playSound(kind) {
+  try {
+    if (window.DrillSound) window.DrillSound[kind]();
+  } catch (e) {
+    /* 音が鳴らないだけ */
+  }
+}
+
+// ホームの「おと」ボタンの表示を現在の状態に合わせる
+function renderSoundToggle() {
+  const btn = document.getElementById("btn-sound");
+  if (!btn || !window.DrillSound) return;
+  btn.textContent = window.DrillSound.isOn() ? "🔊 おと: オン" : "🔇 おと: オフ";
+}
+
+// 「おと」ボタン: オン/オフを切り替える（オンにした時は確認音を1回鳴らす）
+function toggleSound() {
+  if (!window.DrillSound) return;
+  const next = !window.DrillSound.isOn();
+  window.DrillSound.setOn(next);
+  renderSoundToggle();
+  if (next) playSound("correct");
+}
+
 function gradeChoice(ok) {
   const prefId = quizState.ids[quizState.index];
   const p = prefById(prefId);
   const id = cardId(quizState.step, prefId);
+  playSound(ok ? "correct" : "wrong");
   recordAnswer(id, ok);
   quizState.results[prefId] = ok ? "o" : "x";
   quizState.index += 1;
@@ -1075,6 +1102,8 @@ function gradeWrite(ok) {
   const prefId = quizState.ids[quizState.index];
   const step = quizState.step;
   const id = cardId(step, prefId);
+  // 自己採点の×はブザーにせず柔らかい音
+  playSound(ok ? "correct" : "soft");
   recordAnswer(id, ok);
   quizState.results[prefId] = ok ? "o" : "x";
   quizState.index += 1;
@@ -1626,6 +1655,8 @@ function bindEvents() {
   });
   document.getElementById("btn-backup").addEventListener("click", saveBackup);
   document.getElementById("btn-backup-restore").addEventListener("click", openBackup);
+  document.getElementById("btn-sound").addEventListener("click", toggleSound);
+  renderSoundToggle();
   // 促しバナーのタップも保存を直接実行する
   document.getElementById("home-backup-reminder").addEventListener("click", saveBackup);
 

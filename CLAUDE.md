@@ -23,3 +23,8 @@
 - `app.js` の `APP_VERSION` と `sw.js` の `CACHE` は対で上げる（上げないと更新バナーも出ない）。新しい .js を足したら `sw.js` の `ASSETS` にも入れる
 - 公開リポジトリなので、子どもの名前・学校名・住所などは書かない
 - 標準3機能の正本は本社 `.claude/rules/home-apps.md`
+
+## 効果音（2026-11-07〜・v18）
+- `sound.js`（`window.DrillSound`: correct/wrong/soft/isOn/setOn）。Web Audio で合成（音声ファイルなし・音量 gain 0.15）。ON/OFF は localStorage の `todofukenDrill_sound`（既定オン・バックアップ/復元の対象外）。ホームの「おと」ボタンで切替
+- 鳴らす場所: `gradeChoice`（correct/wrong）と `gradeWrite`（○=correct／×=soft）。自己採点の×はブザーにせず柔らかい音（soft）にする（正直に×を押しにくくしない）
+- iPadのマナー/消音スイッチがオンだと Web Audio は鳴らない。AudioContext は最初に鳴らす時に作る
